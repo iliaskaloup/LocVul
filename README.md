@@ -2,7 +2,7 @@
 Software vulnerability detection on real-world data. We propose an LLM-based Vulnerability Detection methodology to the line level of granularity, thereby achieving vulnerability localization.
 
 ## Overview of the overall methodology
-THe high-level overview of the overall methodology that we followed in our study is illustrated in the figure below:
+The high-level overview of the overall methodology that we followed in our study is illustrated in the figure below:
 
 
 ### Replication Package of our research work entitled "..."
