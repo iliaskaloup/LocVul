@@ -979,3 +979,215 @@ for idx, explanation in enumerate(explanation_results):
         explanation.show_in_notebook(text=True)
 
 
+# In[488]:
+
+
+# Helper function to parse flaw lines
+def parse_flaw_lines(flaw_line_str):
+    """
+    Parse flaw_line string into a list of integers.
+
+    :param flaw_line_str: A string of comma-separated line numbers (e.g., '36,37,40').
+    :return: List of integers representing the flaw lines.
+    """
+    if pd.isna(flaw_line_str) or flaw_line_str == '':
+        return []
+    else:
+        return [int(x) for x in flaw_line_str.split(',')]
+
+
+# Function to compute Top-X Accuracy for each function
+def compute_top_x_accuracy(ranked_lines, flaw_lines, top_x=10):
+    """
+    Compute Top-X Accuracy: Measures whether at least one actual vulnerable line appears in the top-X ranking.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices (integers).
+    :param top_x: The number of top lines to consider (default is 10).
+    :return: 1 if at least one vulnerable line is in the top-X, else 0.
+    """
+    top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
+    return 1 if any(line_index in flaw_lines for line_index, _, _ in top_x_lines) else 0
+
+
+# Function to evaluate Top-X Accuracy across all functions
+def evaluate_top_x_accuracy_for_all(all_ranked_lines, all_flaw_lines, top_x=10):
+    """
+    Evaluate Top-X Accuracy for all functions.
+
+    :param all_ranked_lines: List of ranked lines for all functions.
+    :param all_flaw_lines: List of actual vulnerable line indices (comma-separated strings) for all functions.
+    :param top_x: The number of top lines to consider for Top-X Accuracy (default is 10).
+    :return: Top-X Accuracy as a percentage of functions with at least one vulnerable line in the top X ranked lines.
+    """
+    successes = 0
+    total_functions = len(all_ranked_lines)
+
+    for ranked_lines, flaw_line_str in zip(all_ranked_lines, all_flaw_lines):
+        flaw_lines = parse_flaw_lines(flaw_line_str)
+        successes += compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
+
+    # Return the percentage of functions where at least one vulnerable line was found in the top-X
+    return (successes / total_functions) * 100
+
+
+# Function to compute Initial False Alarm (IFA)
+def compute_ifa(ranked_lines, flaw_lines):
+    """
+    Compute Initial False Alarm (IFA): Counts how many false alarms (non-vulnerable lines) occur before the first vulnerable line.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices.
+    :return: Number of false alarms until the first vulnerable line is found.
+    """
+    ifa = 0
+    for line_index, _, _ in ranked_lines:
+        if line_index not in flaw_lines:
+            ifa += 1
+        else:
+            break  # Stop counting when the first vulnerable line is found
+    return ifa
+
+
+# Function to compute Effort@X%Recall
+def compute_effort_at_x_percent_recall(ranked_lines, flaw_lines, total_loc, x_percent=20):
+    """
+    Compute Effort@X%Recall: Measures the amount of effort (in LOC) to find X% of the actual vulnerable lines.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices.
+    :param total_loc: Total number of lines of code (LOC) in the function.
+    :param x_percent: Percentage of vulnerable lines to find for Effort@X%Recall (default is 20%).
+    :return: The effort (as a ratio of inspected LOC to total LOC) required to find X% of the vulnerable lines.
+    """
+    total_vulnerable_lines = len(flaw_lines)
+    if total_vulnerable_lines == 0:
+        return 1.0  # If no vulnerable lines, maximum effort (full LOC inspected)
+
+    # Calculate the number of vulnerable lines we need to find (X% of the total vulnerable lines)
+    target_vulnerable_lines = max(1, int((x_percent / 100) * total_vulnerable_lines))
+
+    # Iterate over ranked lines to count how much effort (LOC) is spent to find X% of the vulnerable lines
+    inspected_lines = 0
+    found_vulnerable_lines = 0
+
+    for line_index, _, _ in ranked_lines:
+        inspected_lines += 1
+        if line_index in flaw_lines:
+            found_vulnerable_lines += 1
+
+        # Stop when we find X% of vulnerable lines
+        if found_vulnerable_lines >= target_vulnerable_lines:
+            break
+
+    # Effort is the ratio of inspected lines (LOC) to the total number of lines (LOC)
+    return inspected_lines / total_loc
+
+
+# Function to compute Recall@1%LOC
+def compute_recall_at_x_percent_loc(ranked_lines, flaw_lines, total_loc, x_percent=1):
+    """
+    Compute Recall@X%LOC: Measures the proportion of actual vulnerable lines that can be found in the top X% of LOC.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices.
+    :param total_loc: Total number of lines of code (LOC) in the function.
+    :param x_percent: Percentage of LOC to consider for the recall (default is 1%).
+    :return: The recall for the top X% LOC.
+    """
+    # Calculate how many lines correspond to X% of the total LOC
+    top_x_percent_loc = max(1, int((x_percent / 100) * total_loc))
+
+    # Count how many vulnerable lines are found within the top X% LOC
+    found_vulnerable_lines = 0
+    inspected_lines = 0
+    for line_index, _, _ in ranked_lines[:top_x_percent_loc]:
+        inspected_lines += 1
+        if line_index in flaw_lines:
+            found_vulnerable_lines += 1
+        if inspected_lines >= top_x_percent_loc:
+            break
+
+    # Recall is the ratio of correctly located vulnerable lines to the total number of actual vulnerable lines
+    return found_vulnerable_lines / len(flaw_lines) if flaw_lines else 0.0
+
+
+# In[489]:
+
+
+# Function to evaluate all metrics for each function
+def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_total_locs, top_x=10, effort_percent=20,
+                                     loc_percent=1):
+    """
+    Evaluate the XAI methods using Top-X Accuracy, IFA, Effort@X%Recall, Recall@X%LOC for all functions.
+
+    :param all_ranked_lines: List of ranked lines for all functions.
+    :param all_flaw_lines: List of actual vulnerable line indices for all functions.
+    :param all_total_locs: List of total number of lines of code (LOC) for all functions.
+    :param top_x: Number of top-ranked lines to consider for Top-X Accuracy.
+    :param effort_percent: Percentage of vulnerable lines to find for Effort@X%Recall.
+    :param loc_percent: Percentage of LOC to consider for Recall@X%LOC.
+    :return: DataFrame with individual and average results for each function.
+    """
+    results = []
+
+    for i, ranked_lines in enumerate(all_ranked_lines):
+        flaw_line_index = all_flaw_lines[i]
+        total_loc = all_total_locs[i]
+
+        # Even if there are no flaw lines, we still compute line-level evaluation for false positives
+        flaw_lines = parse_flaw_lines(flaw_line_index) if pd.notna(flaw_line_index) else []
+
+        # Compute each metric
+        top_x_accuracy = compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
+        ifa = compute_ifa(ranked_lines, flaw_lines)
+        effort_at_x_percent_recall = compute_effort_at_x_percent_recall(ranked_lines, flaw_lines, total_loc,
+                                                                        effort_percent)
+        recall_at_x_percent_loc = compute_recall_at_x_percent_loc(ranked_lines, flaw_lines, total_loc, loc_percent)
+
+        result = {
+            f'Top-{top_x} Accuracy': top_x_accuracy,
+            'IFA': ifa,
+            f'Effort@{effort_percent}%Recall': effort_at_x_percent_recall,
+            f'Recall@{loc_percent}%LOC': recall_at_x_percent_loc
+        }
+
+        results.append(result)
+
+    # Convert results to DataFrame
+    results_df = pd.DataFrame(results)
+
+    # Compute average results
+    average_results = results_df.mean().to_dict()
+    average_results['Type'] = 'Average'
+
+    # Add individual results and average to the final DataFrame
+    results_df['Type'] = 'Individual'
+    average_results_df = pd.DataFrame([average_results])
+
+    # Combine individual and average results
+    final_results_df = pd.concat([results_df, average_results_df], ignore_index=True)
+
+    return final_results_df
+
+
+# In[490]:
+
+
+all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in
+                  positive_indices]  # Extract the flaw line index for each positive sample
+all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in
+                  positive_indices]  # Compute total LOC for each positive sample
+
+# Example usage:
+final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_total_locs, top_x=10,
+                                                    effort_percent=20, loc_percent=1)
+
+# Display results
+print(final_results_df)
+
+# In[ ]:
+
+
+
+
