@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# <b> Function-level Vulnerability Prediction</b>
+
+# In[ ]:
 
 
 #!/usr/bin/env python
@@ -44,6 +46,8 @@ from sklearn.utils import shuffle
 import logging
 
 
+# Basic Configuration of logging and seed
+
 # In[2]:
 
 
@@ -61,6 +65,8 @@ random.seed(seed)
 torch.manual_seed(seed)
 set_seed(seed)
 
+
+# Read data and model
 
 # In[3]:
 
@@ -124,6 +130,8 @@ def getMaxLen(X):
     return max_length
 
 
+# Get tokenizer
+
 # In[6]:
 
 
@@ -136,6 +144,8 @@ tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True) #
 # tokenizer = RobertaTokenizer(vocab_file="../../tokenizer_training/cpp_tokenizer/cpp_tokenizer-vocab.json",
 #                              merges_file="../../tokenizer_training/cpp_tokenizer/cpp_tokenizer-merges.txt")
 
+
+# Split data sets and explore data
 
 # In[7]:
 
@@ -202,6 +212,8 @@ logger.info(f"Validation data length: {len(val_data)}")
 logger.info(f"Test data length: {len(test_data)}")
 
 
+# Pre-processing
+
 # In[8]:
 
 
@@ -243,6 +255,8 @@ else:
     X_train = train_data["Text"]
     Y_train = train_data["Labels"]
 
+
+# Get model and apply tokenizer
 
 # In[9]:
 
@@ -314,6 +328,8 @@ X_test = tokenizer(
 )
 
 
+# Model preparation
+
 # In[10]:
 
 
@@ -380,6 +396,8 @@ print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters()
 # for param in model.roberta.parameters():
 #     param.requires_grad = False
 
+
+# Training loop - Fine-tuning
 
 # In[13]:
 
@@ -555,6 +573,8 @@ else:
     plt.close()
 
 
+# Execution loop
+
 # In[14]:
 
 
@@ -596,6 +616,8 @@ with torch.no_grad():
         probas = np.max(probs_array , axis=1)
         test_probas_pred+=list(probas)
 
+
+# Evaluation process
 
 # In[15]:
 
@@ -717,6 +739,8 @@ with open(avg_csv_file_path, "w", newline="") as csvfile:
 # torch.cuda.empty_cache()
 
 
+# <b> Line-level Vulnerability Detection</b>
+
 # In[17]:
 
 
@@ -761,7 +785,7 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[21]:
+# In[38]:
 
 
 EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
@@ -770,10 +794,10 @@ logger.info(f"Initializing {EXPLAINER} explainer for Positive predictions...")
 EXPLAIN_ONLY_TP_Accuracy = True
 EXPLAIN_ONLY_TP_CostEffect = False
 
-EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_CostEffect
+EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_Accuracy
 
 
-# In[22]:
+# In[39]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -790,7 +814,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[23]:
+# In[40]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -798,7 +822,7 @@ positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # 
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
-# In[24]:
+# In[41]:
 
 
 # Function to predict probabilities for LIME
@@ -821,7 +845,7 @@ def predict_proba_func_lime(texts):
     return probabilities
 
 
-# In[25]:
+# In[42]:
 
 
 # Function to initialize the explainer (LIME or SHAP)
@@ -840,7 +864,7 @@ if EXPLAINER == "LIME" or EXPLAINER == "DEEPLIFTSHAP":
     explainer = initialize_explainer()
 
 
-# In[26]:
+# In[43]:
 
 
 # Function to tokenize the function into lines and tokens
@@ -911,7 +935,9 @@ def clean_special_token_values(all_values, padding=True):
     return all_values
 
 
-# In[27]:
+# XAI-based localization
+
+# In[44]:
 
 
 # Initialize a list to store the LIME explanations
@@ -1003,7 +1029,7 @@ for i, sample in enumerate(positive_samples):
     
 
 
-# In[28]:
+# In[45]:
 
 
 all_ranked_lines = []
@@ -1057,7 +1083,9 @@ for idx, explanation in enumerate(explanation_results):
     #     explanation.show_in_notebook(text=True)
 
 
-# In[29]:
+# Line-level Evaluation
+
+# In[46]:
 
 
 # Accuracy metrics
@@ -1116,7 +1144,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[30]:
+# In[47]:
 
 
 # Cost-Effectiveness metrics
@@ -1320,7 +1348,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[31]:
+# In[48]:
 
 
 # Function to evaluate all metrics for each function
@@ -1378,7 +1406,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
     return final_results_df
 
 
-# In[32]:
+# In[49]:
 
 
 # Prepare data for line-level evaluation
@@ -1391,7 +1419,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[33]:
+# In[50]:
 
 
 # Accuracy Results
@@ -1403,7 +1431,7 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[34]:
+# In[51]:
 
 
 # Cost Effectiveness Results
@@ -1421,7 +1449,7 @@ else: #sort_by_lines == True
     
 
 
-# In[35]:
+# In[52]:
 
 
 # Display Final Evaluation Results
@@ -1434,7 +1462,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[36]:
+# In[53]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1445,7 +1473,9 @@ print(f"Effort@20%Recall: {round(effortXrecall * 100, 1)}%")
 print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
 
-# In[37]:
+# Comparison with sota
+
+# In[63]:
 
 
 # Define metrics
@@ -1461,10 +1491,10 @@ metrics = [
 
 # Metrics values
 your_implementation = [
-    f"{round(top10acc * 100, 1)}%",
-    f"{round(ifa, 1)}",
-    f"{round(effortXrecall * 100, 1)}%",
-    f"{round(recallXloc * 100, 1)}%"
+    f"{int(round(top10acc * 100, 0))}%",
+    f"{int(round(ifa, 1))}",
+    f"{round(effortXrecall * 100, 2)}%",
+    f"{int(round(recallXloc * 100, 0))}%"
 ]
 
 linevul_results = [
