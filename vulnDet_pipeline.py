@@ -314,7 +314,7 @@ X_test = tokenizer(
 )
 
 
-# In[11]:
+# In[10]:
 
 
 # Hyper-parameters
@@ -330,7 +330,7 @@ optimizer = AdamW(model.parameters(),
                   )
 
 
-# In[12]:
+# In[11]:
 
 
 # Build Model
@@ -373,7 +373,7 @@ print(model.to(device))
 print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
-# In[13]:
+# In[12]:
 
 
 # # we do not retrain our pre-trained BERT and train only the last linear dense layer
@@ -381,7 +381,7 @@ print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters()
 #     param.requires_grad = False
 
 
-# In[14]:
+# In[13]:
 
 
 if not FINE_TUNE and os.path.exists(save_path):
@@ -555,7 +555,7 @@ else:
     plt.close()
 
 
-# In[15]:
+# In[14]:
 
 
 # Load best model from checkpoint during training with early stopping
@@ -597,7 +597,7 @@ with torch.no_grad():
         test_probas_pred+=list(probas)
 
 
-# In[16]:
+# In[15]:
 
 
 # compute evaluation metrics
@@ -641,7 +641,7 @@ print("FN=",fn)
 sn.heatmap(conf_matrix, annot=True)
 
 
-# In[17]:
+# In[16]:
 
 
 # Export classification report
@@ -717,7 +717,7 @@ with open(avg_csv_file_path, "w", newline="") as csvfile:
 # torch.cuda.empty_cache()
 
 
-# In[58]:
+# In[17]:
 
 
 import lime
@@ -727,7 +727,41 @@ from transformers import pipeline
 from captum.attr import DeepLiftShap
 
 
-# In[59]:
+# In[19]:
+
+
+# Function to tokenize the function into lines and tokens
+def tokenize_function_to_lines_and_tokens(function_code):
+    # Split function into lines based on newline characters
+    lines = function_code.split('\n')
+    
+    # Tokenize each line
+    tokenized_lines = []
+    for line in lines:
+        tokens = tokenizer.tokenize(line)
+        tokenized_lines.append(tokens)
+    
+    return lines, tokenized_lines
+
+
+# In[20]:
+
+
+# Identify negative predictions ie TN and FN
+negative_indices = [i for i, pred in enumerate(test_pred) if pred == 0]  # Indices of Negative predictions (TNs + FNs)
+
+# Collect lines of negative predictions
+negative_samples = [test_data['Text'].tolist()[i] for i in negative_indices]  # Extract Negative samples from test data
+
+# Flatten
+all_neg_lines = []
+for neg_func in negative_samples:
+    neg_lines, _ = tokenize_function_to_lines_and_tokens(neg_func)
+    for neg_line in neg_lines:
+        all_neg_lines.append(neg_line)
+
+
+# In[21]:
 
 
 EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
@@ -739,7 +773,7 @@ EXPLAIN_ONLY_TP_CostEffect = False
 EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_CostEffect
 
 
-# In[60]:
+# In[22]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -755,11 +789,16 @@ else:
 
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
-#Also identify negative predictions ie TN and FN
-negative_indices = [i for i, pred in enumerate(test_pred) if pred == 0]  # Indices of Negative predictions (TNs + FNs)
+
+# In[23]:
 
 
-# In[61]:
+positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
+
+positive_probas = [test_probas_pred[i] for i in positive_indices]
+
+
+# In[24]:
 
 
 # Function to predict probabilities for LIME
@@ -782,7 +821,7 @@ def predict_proba_func_lime(texts):
     return probabilities
 
 
-# In[62]:
+# In[25]:
 
 
 # Function to initialize the explainer (LIME or SHAP)
@@ -801,7 +840,7 @@ if EXPLAINER == "LIME" or EXPLAINER == "DEEPLIFTSHAP":
     explainer = initialize_explainer()
 
 
-# In[63]:
+# In[26]:
 
 
 # Function to tokenize the function into lines and tokens
@@ -872,26 +911,8 @@ def clean_special_token_values(all_values, padding=True):
     return all_values
 
 
-# In[64]:
+# In[27]:
 
-
-# Collect lines of negative predictions
-negative_samples = [test_data['Text'].tolist()[i] for i in negative_indices]  # Extract Negative samples from test data
-
-# Flatten
-all_neg_lines = []
-for neg_func in negative_samples:
-    neg_lines, _ = tokenize_function_to_lines_and_tokens(neg_func)
-    for neg_line in neg_lines:
-        all_neg_lines.append(neg_line)
-
-
-# In[65]:
-
-
-positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
-
-positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 # Initialize a list to store the LIME explanations
 explanation_results = []
@@ -982,7 +1003,7 @@ for i, sample in enumerate(positive_samples):
     
 
 
-# In[66]:
+# In[28]:
 
 
 all_ranked_lines = []
@@ -1036,7 +1057,7 @@ for idx, explanation in enumerate(explanation_results):
     #     explanation.show_in_notebook(text=True)
 
 
-# In[67]:
+# In[29]:
 
 
 # Accuracy metrics
@@ -1095,7 +1116,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[68]:
+# In[30]:
 
 
 # Cost-Effectiveness metrics
@@ -1197,7 +1218,7 @@ def create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines):
     return sorted_lines_with_labels
 
 # Function to compute Effort@X%Recall by sorting all lines
-def compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=20):
+def compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, all_flaw_lines, test_all_flaw_lines, all_total_locs, x_percent=20):
     
     # Prepare data for Cost-Effectiveness calculation
     all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines) # contains the label (vulnerable or not) of each line in the sorted lines
@@ -1263,7 +1284,7 @@ def compute_recall_at_x_percent_loc_rankedFuncs(all_ranked_lines, positive_proba
     return found_vulnerable_lines / flaw_lines_num
 
 # Function to compute Recall@1%LOC by sorting all lines
-def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=1):
+def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines, all_flaw_lines, test_all_flaw_lines, all_total_locs, x_percent=1):
 
     # Prepare data for Cost-Effectiveness calculation
     all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines) # contains the label (vulnerable or not) of each line in the sorted lines
@@ -1299,7 +1320,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[69]:
+# In[31]:
 
 
 # Function to evaluate all metrics for each function
@@ -1357,7 +1378,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
     return final_results_df
 
 
-# In[70]:
+# In[32]:
 
 
 # Prepare data for line-level evaluation
@@ -1370,7 +1391,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[71]:
+# In[33]:
 
 
 # Accuracy Results
@@ -1382,13 +1403,13 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[77]:
+# In[34]:
 
 
 # Cost Effectiveness Results
 
 # configure sorting choice
-sort_by_lines = False # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
+sort_by_lines = True # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
 
 # Usage
 if sort_by_lines == False:
@@ -1400,7 +1421,7 @@ else: #sort_by_lines == True
     
 
 
-# In[78]:
+# In[35]:
 
 
 # Display Final Evaluation Results
@@ -1413,7 +1434,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[79]:
+# In[36]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1424,7 +1445,7 @@ print(f"Effort@20%Recall: {round(effortXrecall * 100, 1)}%")
 print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
 
-# In[80]:
+# In[37]:
 
 
 # Define metrics
