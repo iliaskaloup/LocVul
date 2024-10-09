@@ -256,21 +256,22 @@ if torch.cuda.device_count() > 1:
     model = torch.nn.DataParallel(model)
 
 
-# Compute maximum length
+# # Compute maximum length
 
-X = tokenizer(
-        text=X_train.tolist(),
-        add_special_tokens=True,
-        max_length=512,
-        truncation=True,
-        padding=True,
-        return_tensors='pt',
-        return_token_type_ids=False,
-        return_attention_mask=True,
-        verbose=True
-    )
+# X = tokenizer(
+#         text=X_train.tolist(),
+#         add_special_tokens=True,
+#         max_length=512,
+#         truncation=True,
+#         padding=True,
+#         return_tensors='pt',
+#         return_token_type_ids=False,
+#         return_attention_mask=True,
+#         verbose=True
+#     )
 
-max_len = getMaxLen(X)
+# max_len = getMaxLen(X)
+max_len = 512
 
 # Tokenization
 
@@ -313,7 +314,7 @@ X_test = tokenizer(
 )
 
 
-# In[10]:
+# In[11]:
 
 
 # Hyper-parameters
@@ -329,7 +330,7 @@ optimizer = AdamW(model.parameters(),
                   )
 
 
-# In[11]:
+# In[12]:
 
 
 # Build Model
@@ -372,7 +373,7 @@ print(model.to(device))
 print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
-# In[12]:
+# In[13]:
 
 
 # # we do not retrain our pre-trained BERT and train only the last linear dense layer
@@ -380,7 +381,7 @@ print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters()
 #     param.requires_grad = False
 
 
-# In[13]:
+# In[14]:
 
 
 if not FINE_TUNE and os.path.exists(save_path):
@@ -554,7 +555,7 @@ else:
     plt.close()
 
 
-# In[46]:
+# In[15]:
 
 
 # Load best model from checkpoint during training with early stopping
@@ -596,7 +597,7 @@ with torch.no_grad():
         test_probas_pred+=list(probas)
 
 
-# In[47]:
+# In[16]:
 
 
 # compute evaluation metrics
@@ -640,7 +641,7 @@ print("FN=",fn)
 sn.heatmap(conf_matrix, annot=True)
 
 
-# In[16]:
+# In[17]:
 
 
 # Export classification report
@@ -716,7 +717,7 @@ with open(avg_csv_file_path, "w", newline="") as csvfile:
 # torch.cuda.empty_cache()
 
 
-# In[208]:
+# In[58]:
 
 
 import lime
@@ -726,32 +727,39 @@ from transformers import pipeline
 from captum.attr import DeepLiftShap
 
 
-# In[209]:
+# In[59]:
 
 
 EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
 logger.info(f"Initializing {EXPLAINER} explainer for Positive predictions...")
 
-EXPLAIN_ONLY_TP = True
+EXPLAIN_ONLY_TP_Accuracy = True
+EXPLAIN_ONLY_TP_CostEffect = False
+
+EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_CostEffect
 
 
-# In[210]:
+# In[60]:
 
 
+# Identify True Positives (where the predicted label and actual label are both 1)
+true_positive_indices = [i for i, (pred, label) in enumerate(zip(test_pred, Y_test.tolist())) if pred == 1 and label == 1]
 if EXPLAIN_ONLY_TP:
-    # Identify True Positives (where the predicted label and actual label are both 1)
-    true_positive_indices = [i for i, (pred, label) in enumerate(zip(test_pred, Y_test.tolist())) if pred == 1 and label == 1]
-    logger.info(f"Selected {len(true_positive_indices)} True Positives for explanations.")
     positive_indices = true_positive_indices
+    logger.info(f"Selected {len(true_positive_indices)} True Positives for explanations.")
 else:
     # Identify True Positives and False Positives
-    positive_indices = [i for i, pred in enumerate(test_pred) if pred == 1]  # Indexes of Positive predictions (TPs + FPs)
-    logger.info(f"Generating explanations for {len(positive_indices)} Positive predictions (TPs and FPs)...")
+    trueNfalse_positive_indices = [i for i, pred in enumerate(test_pred) if pred == 1]  # Indices of Positive predictions (TPs + FPs)
+    logger.info(f"Generating explanations for {len(trueNfalse_positive_indices)} Positive predictions (TPs and FPs)...")
+    positive_indices = trueNfalse_positive_indices
 
-actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indexes of Actual Positive predictions (TPs + FNs)
+actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
+
+#Also identify negative predictions ie TN and FN
+negative_indices = [i for i, pred in enumerate(test_pred) if pred == 0]  # Indices of Negative predictions (TNs + FNs)
 
 
-# In[211]:
+# In[61]:
 
 
 # Function to predict probabilities for LIME
@@ -774,7 +782,7 @@ def predict_proba_func_lime(texts):
     return probabilities
 
 
-# In[212]:
+# In[62]:
 
 
 # Function to initialize the explainer (LIME or SHAP)
@@ -793,7 +801,7 @@ if EXPLAINER == "LIME" or EXPLAINER == "DEEPLIFTSHAP":
     explainer = initialize_explainer()
 
 
-# In[213]:
+# In[63]:
 
 
 # Function to tokenize the function into lines and tokens
@@ -864,7 +872,21 @@ def clean_special_token_values(all_values, padding=True):
     return all_values
 
 
-# In[214]:
+# In[64]:
+
+
+# Collect lines of negative predictions
+negative_samples = [test_data['Text'].tolist()[i] for i in negative_indices]  # Extract Negative samples from test data
+
+# Flatten
+all_neg_lines = []
+for neg_func in negative_samples:
+    neg_lines, _ = tokenize_function_to_lines_and_tokens(neg_func)
+    for neg_line in neg_lines:
+        all_neg_lines.append(neg_line)
+
+
+# In[65]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -960,7 +982,7 @@ for i, sample in enumerate(positive_samples):
     
 
 
-# In[215]:
+# In[66]:
 
 
 all_ranked_lines = []
@@ -1010,11 +1032,11 @@ for idx, explanation in enumerate(explanation_results):
             logger.info(f"Line {line_idx}: {line_text} (Score: {score})")
 
     # Optionally, show the explanation in a notebook
-    if EXPLAINER == "LIME":
-        explanation.show_in_notebook(text=True)
+    # if EXPLAINER == "LIME":
+    #     explanation.show_in_notebook(text=True)
 
 
-# In[216]:
+# In[67]:
 
 
 # Accuracy metrics
@@ -1030,7 +1052,17 @@ def compute_top_x_accuracy(ranked_lines, flaw_lines, top_x=10):
     :return: 1 if at least one vulnerable line is in the top-X, else 0.
     """
     top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
+    # top_x_lines = []
+    # count = 0
+    # for line3 in ranked_lines:
+    #     line = line3[1]
+    #     if line != "":
+    #         top_x_lines.append(line3[0])
+    #         count+=1
+    #         if count>=top_x:
+    #             break
     return 1 if any(line_index in flaw_lines for line_index, _, _ in top_x_lines) else 0
+    #return 1 if any(line_index in flaw_lines for line_index in top_x_lines) else 0
 
 # Helper function to parse flaw lines
 def parse_flaw_lines(flaw_line_str):
@@ -1044,27 +1076,6 @@ def parse_flaw_lines(flaw_line_str):
         return []
     else:
         return [int(x) for x in flaw_line_str.split(',')]
-
-# Function to evaluate Top-X Accuracy across all functions
-def evaluate_top_x_accuracy_for_all(all_ranked_lines, all_flaw_lines, top_x=10):
-    """
-    Evaluate Top-X Accuracy for all functions.
-    
-    :param all_ranked_lines: List of ranked lines for all functions.
-    :param all_flaw_lines: List of actual vulnerable line indices (comma-separated strings) for all functions.
-    :param top_x: The number of top lines to consider for Top-X Accuracy (default is 10).
-    :return: Top-X Accuracy as a percentage of functions with at least one vulnerable line in the top X ranked lines.
-    """
-    successes = 0
-    total_functions = len(all_ranked_lines)
-    
-    for ranked_lines, flaw_line_str in zip(all_ranked_lines, all_flaw_lines):
-        flaw_lines = parse_flaw_lines(flaw_line_str)
-        successes += compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
-    
-    # Return the percentage of functions where at least one vulnerable line was found in the top-X
-    return (successes / total_functions) * 100
-
         
 # Function to compute Initial False Alarm (IFA)
 def compute_ifa(ranked_lines, flaw_lines):
@@ -1084,7 +1095,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[217]:
+# In[68]:
 
 
 # Cost-Effectiveness metrics
@@ -1109,6 +1120,7 @@ def find_recall_breakpoint(total_test_loc, x_percent):
     return max(1, ((x_percent/100) * total_test_loc))
 
 # Prepare data for Cost-Effectiveness calculation
+# Sort the ranked_lines based on their function proba
 def sort_all_ranked_lines(positive_probas, all_ranked_lines):
     combined = list(zip(positive_probas, all_ranked_lines))
     combined_sorted = sorted(combined, key=lambda x: x[0], reverse=True)
@@ -1116,6 +1128,7 @@ def sort_all_ranked_lines(positive_probas, all_ranked_lines):
     
     return all_ranked_lines_sorted
 
+# Sort the flaw_lines based on their function proba
 def sort_all_flaw_lines(positive_probas, all_flaw_lines):
 
     combined = list(zip(positive_probas, all_flaw_lines))
@@ -1125,8 +1138,8 @@ def sort_all_flaw_lines(positive_probas, all_flaw_lines):
     return all_flaw_lines_sorted
     
 
-# Function to compute Effort@X%Recall
-def compute_effort_at_x_percent_recall(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, all_total_locs, x_percent=20):
+# Function to compute Effort@X%Recall by sorting functions
+def compute_effort_at_x_percent_recall_rankedFuncs(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, all_total_locs, x_percent=20):
 
     # Prepare data for Cost-Effectiveness calculation
     all_ranked_lines_sorted = sort_all_ranked_lines(positive_probas, all_ranked_lines)
@@ -1163,8 +1176,59 @@ def compute_effort_at_x_percent_recall(all_ranked_lines, positive_probas, all_fl
 
     return inspected_lines / total_test_loc
 
-# Function to compute Recall@1%LOC
-def compute_recall_at_x_percent_loc(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, all_total_locs, x_percent=1):
+# Assign labels for all sorted lines
+def create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines):
+
+    all_lines_with_labels = []
+    for func_idx, ranked_lines in enumerate(all_ranked_lines):
+        flaw_lines = parse_flaw_lines(all_flaw_lines[func_idx])
+        
+        for line_idx, line_content, line_score in ranked_lines:
+            if line_idx in flaw_lines:
+                label = 1
+            else:
+                label = 0
+
+            all_lines_with_labels.append((line_idx, line_content, line_score, label))
+
+    sorted_lines_with_labels = sorted(all_lines_with_labels, key=lambda x: x[2], reverse=True)
+            
+    
+    return sorted_lines_with_labels
+
+# Function to compute Effort@X%Recall by sorting all lines
+def compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=20):
+    
+    # Prepare data for Cost-Effectiveness calculation
+    all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines) # contains the label (vulnerable or not) of each line in the sorted lines
+    
+    total_test_loc = compute_total_loc(all_total_locs)
+
+    flaw_lines_num = compute_total_flaw_lines(test_all_flaw_lines)
+
+    if flaw_lines_num == 0:
+        return 1.0  # If no vulnerable lines, maximum effort (full LOC inspected)
+
+    effort_breakpoint = find_effort_breakpoint(flaw_lines_num, x_percent)
+
+    # Iterate over ranked lines to count how much effort (LOC) is spent to find X% of the vulnerable lines
+    inspected_lines = 0
+    found_vulnerable_lines = 0
+    for i in range(0, len(all_labels_lines_sorted)):
+        _, _, _, line_label = all_labels_lines_sorted[i]
+        inspected_lines += 1
+        if line_label == 1:
+            found_vulnerable_lines += 1
+
+        # Stop when we find X% of vulnerable lines
+        if found_vulnerable_lines >= effort_breakpoint:
+            break
+
+    return inspected_lines / total_test_loc
+    
+
+# Function to compute Recall@1%LOC by sorting functions
+def compute_recall_at_x_percent_loc_rankedFuncs(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, all_total_locs, x_percent=1):
 
     # Prepare data for Cost-Effectiveness calculation
     all_ranked_lines_sorted = sort_all_ranked_lines(positive_probas, all_ranked_lines)
@@ -1198,8 +1262,44 @@ def compute_recall_at_x_percent_loc(all_ranked_lines, positive_probas, all_flaw_
 
     return found_vulnerable_lines / flaw_lines_num
 
+# Function to compute Recall@1%LOC by sorting all lines
+def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=1):
 
-# In[218]:
+    # Prepare data for Cost-Effectiveness calculation
+    all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines) # contains the label (vulnerable or not) of each line in the sorted lines
+    
+    total_test_loc = compute_total_loc(all_total_locs)
+
+    flaw_lines_num = compute_total_flaw_lines(test_all_flaw_lines)
+    
+    recall_breakpoint = find_recall_breakpoint(total_test_loc, x_percent)
+
+    # Count how many vulnerable lines are found within the top X% LOC
+    inspected_lines = 0
+    found_vulnerable_lines = 0
+    inspect_neg_lines = True
+    for i in range(0, len(all_labels_lines_sorted)):
+        inspected_lines += 1
+        _, _, _, line_label = all_labels_lines_sorted[i]
+
+        if line_label == 1:
+            found_vulnerable_lines += 1
+
+        if inspected_lines >= recall_breakpoint:
+            inspect_neg_lines = False
+            break
+
+    if inspect_neg_lines:
+        for neg_line in all_neg_lines:
+            inspected_lines += 1
+            if inspected_lines >= recall_breakpoint:
+                break
+            
+
+    return found_vulnerable_lines / flaw_lines_num
+
+
+# In[69]:
 
 
 # Function to evaluate all metrics for each function
@@ -1220,6 +1320,9 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
         # Even if there are no flaw lines, we still compute line-level evaluation for false positives
         flaw_lines = parse_flaw_lines(flaw_line_index) if pd.notna(flaw_line_index) else []
 
+        # # skip samples with missing line-level label - nan flaw lines. It happens also in TP not only in FP.
+        # if flaw_lines:
+        
         # Compute each metric
         top_x_accuracy = compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
         ifa = compute_ifa(ranked_lines, flaw_lines)
@@ -1254,13 +1357,23 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
     return final_results_df
 
 
-# In[219]:
+# In[70]:
 
 
-# Accuracy Resutls
+# Prepare data for line-level evaluation
+
 all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in positive_indices]  # Extract the flaw line indexes for each positive sample
 all_flaw_lines_text = [test_data['Lines'].tolist()[i] for i in positive_indices]  # Extract the flaw lines for each positive sample
 all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in positive_indices]  # Compute total LOC for each positive sample
+
+test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_positive_indices] # Extract the flaw line indexes for each actual positive sample
+test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
+
+
+# In[71]:
+
+
+# Accuracy Results
 
 # Usage:
 final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
@@ -1269,18 +1382,25 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[ ]:
+# In[77]:
 
 
 # Cost Effectiveness Results
-test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_positive_indices] # Extract the flaw line indexes for each actual positive sample
-test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
-effortXrecall = compute_effort_at_x_percent_recall(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=20)
-recallXloc = compute_recall_at_x_percent_loc(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=1)
+# configure sorting choice
+sort_by_lines = False # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
+
+# Usage
+if sort_by_lines == False:
+    effortXrecall = compute_effort_at_x_percent_recall_rankedFuncs(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=20)
+    recallXloc = compute_recall_at_x_percent_loc_rankedFuncs(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=1)
+else: #sort_by_lines == True
+    effortXrecall = compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=20)
+    recallXloc = compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=1)
+    
 
 
-# In[253]:
+# In[78]:
 
 
 # Display Final Evaluation Results
@@ -1293,7 +1413,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[256]:
+# In[79]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1302,4 +1422,106 @@ print(f"Median IFA: {round(ifa, 1)}")
 
 print(f"Effort@20%Recall: {round(effortXrecall * 100, 1)}%")
 print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
+
+
+# In[80]:
+
+
+# Define metrics
+headers = ["Metric", "Ours", "LineVul", "Saliency", "DeepLift", "DeepLiftSHAP", "LIG", "GradientSHAP", "CppCheck"]
+
+# Metric names
+metrics = [
+    "Top-10 Accuracy",
+    "Median IFA",
+    "Effort@20%Recall",
+    "Recall@1%LOC"
+]
+
+# Metrics values
+your_implementation = [
+    f"{round(top10acc * 100, 1)}%",
+    f"{round(ifa, 1)}",
+    f"{round(effortXrecall * 100, 1)}%",
+    f"{round(recallXloc * 100, 1)}%"
+]
+
+linevul_results = [
+    "65%",
+    "1",
+    "0.75%",
+    "24%"
+]
+
+saliency = [
+    "58%",
+    "4",
+    "1.51%",
+    "13%"
+]
+
+deeplift = [
+    "57%",
+    "3",
+    "1.51%",
+    "13%"
+]
+
+deepliftshap = [
+    "57%",
+    "3",
+    "1.51%",
+    "13%"
+]
+
+lig = [
+    "53%",
+    "4",
+    "1.06",
+    "19%"
+]
+
+gradientshap = [
+    "52%",
+    "3",
+    "1.60%",
+    "13%"
+]
+
+cppcheck = [
+    "15%",
+    "4",
+    "13%",
+    "4%"
+]
+
+# Combine all results into a list of lists
+all_results = [
+    your_implementation,
+    linevul_results,
+    saliency,
+    deeplift,
+    deepliftshap,
+    lig,
+    gradientshap,
+    cppcheck
+]
+
+# Print table header with consistent column width (15 characters)
+column_width = 15
+print(f"{headers[0]:<25} {headers[1]:<{column_width}} {headers[2]:<{column_width}} {headers[3]:<{column_width}} {headers[4]:<{column_width}} {headers[5]:<{column_width}} {headers[6]:<{column_width}} {headers[7]:<{column_width}} {headers[8]:<{column_width}}")
+
+# Print separator
+print("=" * (25 + column_width * (len(headers) - 1)))
+
+# Print metric rows
+for i, metric in enumerate(metrics):
+    row_values = [results[i] for results in all_results]
+    print(f"{metric:<25} {' '.join([f'{value:<{column_width}}' for value in row_values])}")
+
+
+# In[ ]:
+
+
+
 
