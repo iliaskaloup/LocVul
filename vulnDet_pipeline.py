@@ -751,13 +751,13 @@ from transformers import pipeline
 from captum.attr import DeepLiftShap
 
 
-# In[19]:
+# In[70]:
 
 
 # Function to tokenize the function into lines and tokens
-def tokenize_function_to_lines_and_tokens(function_code):
+def tokenize_function_to_lines_and_tokens(function_code, split_char):
     # Split function into lines based on newline characters
-    lines = function_code.split('\n')
+    lines = function_code.split(split_char)
     
     # Tokenize each line
     tokenized_lines = []
@@ -780,12 +780,12 @@ negative_samples = [test_data['Text'].tolist()[i] for i in negative_indices]  # 
 # Flatten
 all_neg_lines = []
 for neg_func in negative_samples:
-    neg_lines, _ = tokenize_function_to_lines_and_tokens(neg_func)
+    neg_lines, _ = tokenize_function_to_lines_and_tokens(neg_func, '\n')
     for neg_line in neg_lines:
         all_neg_lines.append(neg_line)
 
 
-# In[38]:
+# In[196]:
 
 
 EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
@@ -797,7 +797,7 @@ EXPLAIN_ONLY_TP_CostEffect = False
 EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_Accuracy
 
 
-# In[39]:
+# In[197]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -814,7 +814,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[40]:
+# In[198]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -822,7 +822,7 @@ positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # 
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
-# In[41]:
+# In[199]:
 
 
 # Function to predict probabilities for LIME
@@ -845,7 +845,7 @@ def predict_proba_func_lime(texts):
     return probabilities
 
 
-# In[42]:
+# In[200]:
 
 
 # Function to initialize the explainer (LIME or SHAP)
@@ -864,21 +864,8 @@ if EXPLAINER == "LIME" or EXPLAINER == "DEEPLIFTSHAP":
     explainer = initialize_explainer()
 
 
-# In[43]:
+# In[201]:
 
-
-# Function to tokenize the function into lines and tokens
-def tokenize_function_to_lines_and_tokens(function_code):
-    # Split function into lines based on newline characters
-    lines = function_code.split('\n')
-    
-    # Tokenize each line
-    tokenized_lines = []
-    for line in lines:
-        tokens = tokenizer.tokenize(line)
-        tokenized_lines.append(tokens)
-    
-    return lines, tokenized_lines
 
 # Function to compute LIME values for each line by summing the token-level values
 def compute_lime_values_per_line(tokenized_lines, token_scores_dict):
@@ -937,7 +924,7 @@ def clean_special_token_values(all_values, padding=True):
 
 # XAI-based localization
 
-# In[44]:
+# In[202]:
 
 
 # Initialize a list to store the LIME explanations
@@ -966,7 +953,7 @@ for i, sample in enumerate(positive_samples):
         
         # Generate explanation using the SHAP explainer
         # Tokenize the function into lines and tokens
-        lines, tokenized_lines = tokenize_function_to_lines_and_tokens(sample)
+        lines, tokenized_lines = tokenize_function_to_lines_and_tokens(sample, '\n')
 
         # Encode the sample (input) and get embeddings
         encodings = tokenizer(sample, return_tensors='pt', padding=True, truncation=True, max_length=max_len).to(device)
@@ -999,7 +986,7 @@ for i, sample in enumerate(positive_samples):
             logger.info(f"Generating ATTENTION-based explanation for sample {i + 1}/{len(positive_samples)}")
         
         # Tokenize the function into lines and tokens
-        lines, tokenized_lines = tokenize_function_to_lines_and_tokens(sample)
+        lines, tokenized_lines = tokenize_function_to_lines_and_tokens(sample, '\n')
         
         # Get model predictions along with attention weights
         with torch.no_grad():
@@ -1029,10 +1016,11 @@ for i, sample in enumerate(positive_samples):
     
 
 
-# In[45]:
+# In[203]:
 
 
 all_ranked_lines = []
+all_lines = []
 for idx, explanation in enumerate(explanation_results):
     if idx % 10 == 0:
         logger.info(f"Explanation for Positive Sample {idx + 1}:")
@@ -1055,7 +1043,7 @@ for idx, explanation in enumerate(explanation_results):
     function_code = positive_samples[idx]
     
     # Tokenize the function into lines and tokens
-    lines, tokenized_lines = tokenize_function_to_lines_and_tokens(function_code)
+    lines, tokenized_lines = tokenize_function_to_lines_and_tokens(function_code, '\n')
     
     # Compute values for each line
     if EXPLAINER == "DEEPLIFTSHAP":
@@ -1067,6 +1055,7 @@ for idx, explanation in enumerate(explanation_results):
     
     # Create a list of tuples containing (line_index, line_text, lime_score)
     line_scores_with_text = [(line_idx, line, line_scores[line_idx]) for line_idx, line in enumerate(lines)]
+    all_lines.append(line_scores_with_text)
     
     # Sort the lines by score in descending order
     ranked_lines = sorted(line_scores_with_text, key=lambda x: x[2], reverse=True)
@@ -1085,7 +1074,7 @@ for idx, explanation in enumerate(explanation_results):
 
 # Line-level Evaluation
 
-# In[46]:
+# In[204]:
 
 
 # Accuracy metrics
@@ -1144,7 +1133,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[47]:
+# In[205]:
 
 
 # Cost-Effectiveness metrics
@@ -1348,11 +1337,35 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[48]:
+# In[206]:
+
+
+# def check_beyond_token_limit(lines_text, flaw_lines_text):
+
+#     if type(flaw_lines_text) != str:
+#         return False
+#     else:
+    
+#         beyond = True
+    
+#         _, flaw_tokens = tokenize_function_to_lines_and_tokens(flaw_lines_text, '/~/') 
+    
+#         function_string = '\n'.join([line_text for _, line_text, _ in lines_text])
+#         _, func_tokens = tokenize_function_to_lines_and_tokens(function_string, '\n')
+        
+#         for encoded_flaw in flaw_tokens:    
+#             if encoded_flaw in func_tokens:
+#                 beyond = False
+#                 break
+    
+#     return beyond
+
+
+# In[207]:
 
 
 # Function to evaluate all metrics for each function
-def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10):
+def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines, all_flaw_lines_text, top_x=10):
     """
     Evaluate the XAI methods using Top-X Accuracy, IFA, Effort@X%Recall, Recall@X%LOC for all functions.
 
@@ -1362,8 +1375,13 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
     :return: DataFrame with individual and average results for each function.
     """
     results = []
-    
     for i, ranked_lines in enumerate(all_ranked_lines):
+
+        # check whether the flaws reside beyond the max_len of the model
+        #beyond = check_beyond_token_limit(all_lines[i], all_flaw_lines_text[i])      
+
+        #if beyond == False:
+        
         flaw_line_index = all_flaw_lines[i]
 
         # Even if there are no flaw lines, we still compute line-level evaluation for false positives
@@ -1382,6 +1400,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
         }
         
         results.append(result)
+
 
     # Convert results to DataFrame
     results_df = pd.DataFrame(results)
@@ -1406,32 +1425,32 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
     return final_results_df
 
 
-# In[49]:
+# In[208]:
 
 
 # Prepare data for line-level evaluation
 
 all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in positive_indices]  # Extract the flaw line indexes for each positive sample
 all_flaw_lines_text = [test_data['Lines'].tolist()[i] for i in positive_indices]  # Extract the flaw lines for each positive sample
-all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in positive_indices]  # Compute total LOC for each positive sample
+#all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in positive_indices]  # Compute total LOC for each positive sample
 
 test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_positive_indices] # Extract the flaw line indexes for each actual positive sample
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[50]:
+# In[209]:
 
 
 # Accuracy Results
 
 # Usage:
-final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
+final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines, all_flaw_lines_text, top_x=10)
 
 # Display Accuracy Results per Function
 print(final_results_df)
 
 
-# In[51]:
+# In[210]:
 
 
 # Cost Effectiveness Results
@@ -1449,7 +1468,7 @@ else: #sort_by_lines == True
     
 
 
-# In[52]:
+# In[211]:
 
 
 # Display Final Evaluation Results
@@ -1462,7 +1481,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[53]:
+# In[212]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1475,7 +1494,7 @@ print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
 # Comparison with sota
 
-# In[63]:
+# In[213]:
 
 
 # Define metrics
