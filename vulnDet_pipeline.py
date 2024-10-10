@@ -741,7 +741,7 @@ with open(avg_csv_file_path, "w", newline="") as csvfile:
 
 # <b> Line-level Vulnerability Detection</b>
 
-# In[17]:
+# In[268]:
 
 
 import lime
@@ -751,7 +751,70 @@ from transformers import pipeline
 from captum.attr import DeepLiftShap
 
 
-# In[70]:
+# In[290]:
+
+
+# Eliminate Test samples that are vulnerable (target=1) but they have missing line-level labels (flaw lines is nan)
+REMOVE_MISSING_LINE_LABELS = True # True # False
+
+if REMOVE_MISSING_LINE_LABELS:
+
+    test_data = test_data.reset_index(drop=True)
+    test_data = test_data[~((test_data['Labels'] == 1) & (test_data['Line_Index'].isna()))]
+    test_data = test_data.reset_index(drop=True)
+    Y_test = torch.LongTensor(test_data["Labels"].tolist())
+    
+    
+    X_test = tokenizer(
+        text=test_data['Text'].tolist(),
+        add_special_tokens=True,
+        max_length=max_len,
+        truncation=True,
+        padding=True,
+        return_tensors='pt',
+        return_token_type_ids=False,
+        return_attention_mask=True,
+        verbose=True
+    )
+    
+    test_dataset = TensorDataset(X_test["input_ids"], X_test["attention_mask"], Y_test)
+    test_sampler = SequentialSampler(test_dataset)
+    test_dataloader = DataLoader(test_dataset, sampler=test_sampler, batch_size=batch_size)
+    
+    # Make new predictions
+    logger.info("Starting testing...")
+    test_start_time = time.time()
+    model.eval()
+    test_pred = []
+    test_probas_pred = []
+    actual_labels = []
+    test_loss = 0
+    with torch.no_grad():
+        for step_num, batch_data in enumerate(tqdm(test_dataloader, desc='Testing')):
+            input_ids, att_mask, labels = [data.to(device) for data in batch_data]
+    
+            output = model(input_ids = input_ids, attention_mask=att_mask) #, labels= labels
+    
+            loss = loss_fun(output.logits, labels) #loss = output.loss #output[0]
+            test_loss += loss.item()
+    
+            logits_array = output.logits.cpu().detach().numpy()
+            #probs_array = softmax(logits_array, axis=1)
+            probs_array = torch.softmax(torch.tensor(logits_array), dim=-1).numpy()
+            
+            preds = np.argmax(probs_array , axis=-1)
+            test_pred+=list(preds)
+            actual_labels+=labels.cpu().numpy().tolist()
+    
+            probas = np.max(probs_array , axis=1)
+            test_probas_pred+=list(probas)
+    
+    # compute evaluation metrics
+    new_class_report = classification_report(actual_labels, test_pred)
+    logger.info(f"Classification Report:\n{new_class_report}")
+
+
+# In[291]:
 
 
 # Function to tokenize the function into lines and tokens
@@ -768,7 +831,7 @@ def tokenize_function_to_lines_and_tokens(function_code, split_char):
     return lines, tokenized_lines
 
 
-# In[20]:
+# In[292]:
 
 
 # Identify negative predictions ie TN and FN
@@ -785,7 +848,7 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[196]:
+# In[293]:
 
 
 EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
@@ -797,7 +860,7 @@ EXPLAIN_ONLY_TP_CostEffect = False
 EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_Accuracy
 
 
-# In[197]:
+# In[294]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -814,7 +877,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[198]:
+# In[295]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -822,7 +885,7 @@ positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # 
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
-# In[199]:
+# In[296]:
 
 
 # Function to predict probabilities for LIME
@@ -845,7 +908,7 @@ def predict_proba_func_lime(texts):
     return probabilities
 
 
-# In[200]:
+# In[297]:
 
 
 # Function to initialize the explainer (LIME or SHAP)
@@ -864,7 +927,7 @@ if EXPLAINER == "LIME" or EXPLAINER == "DEEPLIFTSHAP":
     explainer = initialize_explainer()
 
 
-# In[201]:
+# In[298]:
 
 
 # Function to compute LIME values for each line by summing the token-level values
@@ -924,7 +987,7 @@ def clean_special_token_values(all_values, padding=True):
 
 # XAI-based localization
 
-# In[202]:
+# In[299]:
 
 
 # Initialize a list to store the LIME explanations
@@ -1013,10 +1076,9 @@ for i, sample in enumerate(positive_samples):
         explanation = [(line_idx, line, line_attention_scores[line_idx]) for line_idx, line in enumerate(lines)]
     
     explanation_results.append(explanation)
-    
 
 
-# In[203]:
+# In[300]:
 
 
 all_ranked_lines = []
@@ -1074,7 +1136,7 @@ for idx, explanation in enumerate(explanation_results):
 
 # Line-level Evaluation
 
-# In[204]:
+# In[301]:
 
 
 # Accuracy metrics
@@ -1133,7 +1195,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[205]:
+# In[302]:
 
 
 # Cost-Effectiveness metrics
@@ -1337,7 +1399,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[206]:
+# In[303]:
 
 
 # def check_beyond_token_limit(lines_text, flaw_lines_text):
@@ -1361,7 +1423,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
 #     return beyond
 
 
-# In[207]:
+# In[304]:
 
 
 # Function to evaluate all metrics for each function
@@ -1386,9 +1448,6 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines
 
         # Even if there are no flaw lines, we still compute line-level evaluation for false positives
         flaw_lines = parse_flaw_lines(flaw_line_index) if pd.notna(flaw_line_index) else []
-
-        # # skip samples with missing line-level label - nan flaw lines. It happens also in TP not only in FP.
-        # if flaw_lines:
         
         # Compute each metric
         top_x_accuracy = compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
@@ -1425,7 +1484,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines
     return final_results_df
 
 
-# In[208]:
+# In[305]:
 
 
 # Prepare data for line-level evaluation
@@ -1438,7 +1497,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[209]:
+# In[307]:
 
 
 # Accuracy Results
@@ -1450,7 +1509,7 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[210]:
+# In[308]:
 
 
 # Cost Effectiveness Results
@@ -1468,7 +1527,7 @@ else: #sort_by_lines == True
     
 
 
-# In[211]:
+# In[309]:
 
 
 # Display Final Evaluation Results
@@ -1481,7 +1540,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[212]:
+# In[310]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1494,7 +1553,7 @@ print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
 # Comparison with sota
 
-# In[213]:
+# In[319]:
 
 
 # Define metrics
