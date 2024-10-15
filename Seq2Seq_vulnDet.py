@@ -310,7 +310,7 @@ test_loader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), 
 
 # Model Initialization
 
-# In[16]:
+# In[29]:
 
 
 # Load the CodeT5 model
@@ -328,7 +328,7 @@ if torch.cuda.device_count() > 1:
 
 # Training Loop
 
-# In[17]:
+# In[30]:
 
 
 # Hyper-parameters
@@ -343,7 +343,7 @@ lr_scheduler = get_scheduler(
 )
 
 
-# In[18]:
+# In[31]:
 
 
 ## Training Loop
@@ -380,7 +380,7 @@ for epoch_num in range(num_epochs):
 
         # Forward pass
         outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss
+        loss = outputs.loss.mean()
         loss.backward()
 
         # Clip gradients to prevent exploding gradients
@@ -393,7 +393,10 @@ for epoch_num in range(num_epochs):
         train_loss += loss.item()
         
         # Collect predictions and actual labels for ROUGE
-        preds = model.generate(input_ids=input_ids, attention_mask=attention_mask)
+        if torch.cuda.device_count() > 1:
+            preds = model.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+        else:
+            preds = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
         decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
@@ -424,10 +427,13 @@ for epoch_num in range(num_epochs):
 
             # Forward pass
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            val_loss += outputs.loss.item()
+            val_loss += outputs.loss.mean().item()
             
             # Collect predictions and actual labels for ROUGE
-            preds = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+            if torch.cuda.device_count() > 1:
+                preds = model.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+            else:
+                preds = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
             decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
@@ -498,7 +504,7 @@ plt.close()
 
 # Evaluation
 
-# In[19]:
+# In[ ]:
 
 
 # Load best model from checkpoint during training with early stopping
@@ -512,7 +518,7 @@ else:
 model.to(device)
 
 
-# In[20]:
+# In[ ]:
 
 
 # Make predictions on the testing set
@@ -529,7 +535,10 @@ with torch.no_grad():
         input_ids, attention_mask, labels = [data.to(device) for data in batch_data]
 
         # Generate predictions
-        outputs = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+        if torch.cuda.device_count() > 1:
+            outputs = model.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+        else:
+            outputs = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
 
         # Decode predicted sequences and actual labels
         decoded_preds = tokenizer.batch_decode(outputs, skip_special_tokens=True)
@@ -546,7 +555,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[21]:
+# In[ ]:
 
 
 def extract_rouge_value(rouge_scores, rouge_key):
@@ -574,7 +583,7 @@ logger.info(f"ROUGE-L: {rougeL_score:.4f}")
 logger.info(f"ROUGE-Lsum: {rougeLsum_score:.4f}")
 
 
-# In[22]:
+# In[ ]:
 
 
 # Optionally, save the predictions and true labels for further analysis
@@ -586,7 +595,7 @@ with open('test_predictions.txt', 'w') as f_pred, open('test_actual_labels.txt',
 
 # Generating Vulnerable Lines (Inference)
 
-# In[23]:
+# In[ ]:
 
 
 # Function to generate vulnerable lines for a code snippet
@@ -630,35 +639,8 @@ print("Predicted Vulnerable Lines:")
 print(predicted_vulnerable_lines)
 
 
-# In[24]:
+# In[ ]:
 
-
-# Function to generate vulnerable lines for a code snippet
-def generate_vulnerable_lines(model, tokenizer, code_snippet, max_length=128):
-    # Tokenize the input code snippet
-    inputs = tokenizer(
-        code_snippet,
-        return_tensors='pt',
-        truncation=True,
-        padding='max_length',  # You can adjust padding as needed
-        max_length=512  # The max length for the input code snippet
-    ).to(device)
-
-    # Generate predicted vulnerable lines using the model
-    outputs = model.generate(
-        input_ids=inputs['input_ids'],
-        attention_mask=inputs['attention_mask'],
-        max_length=max_length,  # Maximum length for the generated sequence (vulnerable lines)
-        num_beams=4,  # Beam search for better results (you can adjust or remove for greedy search)
-        early_stopping=True  # Stop generating once the model reaches an end token
-    )
-
-    # Decode the predicted tokens into text
-    vulnerable_lines = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return vulnerable_lines
-
-# Set the model to evaluation mode
-model.eval()
 
 # Assuming your test dataset is loaded into a DataFrame called 'test_data'
 # Use the first sample from the test set (column 'processed_func' contains the source code)
@@ -672,7 +654,7 @@ print("First Test Sample Code Snippet:")
 print(first_code_snippet)
 
 
-# In[25]:
+# In[ ]:
 
 
 print("\nPredicted Vulnerable Lines:")
