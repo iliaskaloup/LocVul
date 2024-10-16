@@ -106,6 +106,12 @@ dataset = dataset.dropna(subset=["processed_func"])
 # In[5]:
 
 
+FINE_TUNE = False  # Set this to False if you don't want to fine-tune the model and load from checkpoint
+
+
+# In[6]:
+
+
 # data split
 val_ratio = 0.1
 num_of_ratio = int(val_ratio * len(dataset))
@@ -115,14 +121,14 @@ train_data = data.iloc[0:-num_of_ratio, :]
 val_data = data.iloc[-num_of_ratio:, :]
 
 
-# In[6]:
+# In[7]:
 
 
 # release some memory
 del dataset
 
 
-# In[7]:
+# In[8]:
 
 
 ## train data
@@ -172,7 +178,7 @@ logger.info(f"Test data length: {len(test_data)}")
 train_data.head()
 
 
-# In[8]:
+# In[9]:
 
 
 # Function to replace "/~/" with "\n" in the 'Lines' column
@@ -186,21 +192,9 @@ val_data = replace_delimiter_with_newline(val_data)
 test_data = replace_delimiter_with_newline(test_data)
 
 
-# In[9]:
-
-
-test_data["Text"][1]
-
-
-# In[10]:
-
-
-test_data["Lines"][1]
-
-
 # Tokenization
 
-# In[11]:
+# In[12]:
 
 
 model_variation = "Salesforce/codet5-base" # "google-t5/t5-base" # Salesforce/codet5-base"
@@ -208,7 +202,7 @@ model_variation = "Salesforce/codet5-base" # "google-t5/t5-base" # Salesforce/co
 tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True)
 
 
-# In[12]:
+# In[13]:
 
 
 # Get the actual tokenized lengths
@@ -253,7 +247,7 @@ logger.info(f"Maximum tokenized length of Lines: {max_len_lines}")
 max_len_lines = 128
 
 
-# In[13]:
+# In[14]:
 
 
 def tokenize_data(data, max_len_lines):
@@ -287,14 +281,14 @@ test_encodings = tokenize_data(test_data, max_len_lines)
 
 # Prepare DataLoaders
 
-# In[14]:
+# In[15]:
 
 
 # Define batch size
 batch_size = 8
 
 
-# In[15]:
+# In[16]:
 
 
 # Create TensorDatasets
@@ -310,7 +304,7 @@ test_loader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), 
 
 # Model Initialization
 
-# In[29]:
+# In[17]:
 
 
 # Load the CodeT5 model
@@ -328,7 +322,7 @@ if torch.cuda.device_count() > 1:
 
 # Training Loop
 
-# In[30]:
+# In[18]:
 
 
 # Hyper-parameters
@@ -343,91 +337,55 @@ lr_scheduler = get_scheduler(
 )
 
 
-# In[31]:
+# In[19]:
 
 
-## Training Loop
-# Early Stopping and Checkpointing Setup
-rouge_metric = load("rouge")
-best_val_rouge = -1
-best_epoch = -1
-no_improvement_counter = 0
-
-# Initialize lists for tracking loss and ROUGE scores
-train_loss_per_epoch = []
-val_loss_per_epoch = []
-train_rouge_per_epoch = []
-val_rouge_per_epoch = []
-
-# Start Training
-milli_sec1 = int(round(time.time() * 1000))
-logger.info("Starting training...")
-
-for epoch_num in range(num_epochs):
-    logger.info(f'Epoch: {epoch_num + 1}')
+if FINE_TUNE:
+    ## Training Loop
+    # Early Stopping and Checkpointing Setup
+    rouge_metric = load("rouge")
+    best_val_rouge = -1
+    best_epoch = -1
+    no_improvement_counter = 0
     
-    # Training
-    model.train()
-    train_loss = 0
-    total_preds = []
-    total_labels = []
-
-    for step_num, batch_data in enumerate(tqdm(train_loader, desc='Training')):
-        input_ids, attention_mask, labels = [data.to(device) for data in batch_data]
-
-        # Zero gradients
-        optimizer.zero_grad()
-
-        # Forward pass
-        outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-        loss = outputs.loss.mean()
-        loss.backward()
-
-        # Clip gradients to prevent exploding gradients
-        clip_grad_norm_(parameters=model.parameters(), max_norm=1.0)
-
-        # Update parameters
-        optimizer.step()
-        lr_scheduler.step()
-
-        train_loss += loss.item()
+    # Initialize lists for tracking loss and ROUGE scores
+    train_loss_per_epoch = []
+    val_loss_per_epoch = []
+    train_rouge_per_epoch = []
+    val_rouge_per_epoch = []
+    
+    # Start Training
+    milli_sec1 = int(round(time.time() * 1000))
+    logger.info("Starting training...")
+    
+    for epoch_num in range(num_epochs):
+        logger.info(f'Epoch: {epoch_num + 1}')
         
-        # Collect predictions and actual labels for ROUGE
-        if torch.cuda.device_count() > 1:
-            preds = model.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
-        else:
-            preds = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
-        decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
-        decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-        total_preds.extend(decoded_preds)
-        total_labels.extend(decoded_labels)
-
-    # Compute average training loss
-    train_loss_per_epoch.append(train_loss / len(train_loader))
-
-    # Compute ROUGE for training set
-    train_rouge_scores = rouge_metric.compute(predictions=total_preds, references=total_labels, use_stemmer=True)
-    # Check if ROUGE score is a scalar (float) or a detailed dictionary
-    if isinstance(train_rouge_scores["rougeL"], dict):
-        avg_train_rouge = train_rouge_scores["rougeL"].mid.fmeasure #* 100
-    else:
-        avg_train_rouge = train_rouge_scores["rougeL"] #* 100  # For scalar case
-    train_rouge_per_epoch.append(avg_train_rouge)
-
-    # Validation
-    model.eval()
-    val_loss = 0
-    val_preds = []
-    val_labels = []
-
-    with torch.no_grad():
-        for step_num_e, batch_data in enumerate(tqdm(val_loader, desc='Validation')):
+        # Training
+        model.train()
+        train_loss = 0
+        total_preds = []
+        total_labels = []
+    
+        for step_num, batch_data in enumerate(tqdm(train_loader, desc='Training')):
             input_ids, attention_mask, labels = [data.to(device) for data in batch_data]
-
+    
+            # Zero gradients
+            optimizer.zero_grad()
+    
             # Forward pass
             outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
-            val_loss += outputs.loss.mean().item()
+            loss = outputs.loss.mean()
+            loss.backward()
+    
+            # Clip gradients to prevent exploding gradients
+            clip_grad_norm_(parameters=model.parameters(), max_norm=1.0)
+    
+            # Update parameters
+            optimizer.step()
+            lr_scheduler.step()
+    
+            train_loss += loss.item()
             
             # Collect predictions and actual labels for ROUGE
             if torch.cuda.device_count() > 1:
@@ -436,75 +394,112 @@ for epoch_num in range(num_epochs):
                 preds = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
             decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
             decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
-
-            val_preds.extend(decoded_preds)
-            val_labels.extend(decoded_labels)
-
-    # Compute average validation loss
-    val_loss_per_epoch.append(val_loss / len(val_loader))
-
-    # Compute ROUGE for validation set
-    val_rouge_scores = rouge_metric.compute(predictions=val_preds, references=val_labels, use_stemmer=True)
-    # Check if ROUGE score is a scalar (float) or a detailed dictionary
-    if isinstance(val_rouge_scores["rougeL"], dict):
-        avg_val_rouge = val_rouge_scores["rougeL"].mid.fmeasure #* 100
-    else:
-        avg_val_rouge = val_rouge_scores["rougeL"] #* 100  # For scalar case
-    val_rouge_per_epoch.append(avg_val_rouge)
     
-    logger.info(f"Epoch {epoch_num + 1}/{num_epochs} - Train Loss: {train_loss_per_epoch[-1]:.4f} - Valid Loss: {val_loss_per_epoch[-1]:.4f}")
-    logger.info(f"Epoch {epoch_num + 1}/{num_epochs} - Train ROUGE-L: {avg_train_rouge:.4f} - Valid ROUGE-L: {avg_val_rouge:.4f}")
-
-    # Implement Early Stopping and Save Best Model
-    if avg_val_rouge > best_val_rouge:
-        best_val_rouge = avg_val_rouge
-        best_epoch = epoch_num + 1
-        no_improvement_counter = 0
-
-        # Save the best model
-        #torch.save(model.state_dict(), save_path)
-        save_checkpoint(save_path, epoch_num+1, model, optimizer.state_dict(), lr_scheduler.state_dict(), train_loss_per_epoch, val_loss_per_epoch, train_rouge_per_epoch, val_rouge_per_epoch)
-        logger.info(f"Model saved at epoch {epoch_num + 1} with ROUGE-L: {best_val_rouge:.4f}")
-    else:
-        no_improvement_counter += 1
-
-        if no_improvement_counter >= patience:
-            logger.info(f"Early stopping after {epoch_num + 1} epochs. Best epoch: {best_epoch} with ROUGE-L: {best_val_rouge:.4f}")
-            break
-
-# Training Complete
-milli_sec2 = int(round(time.time() * 1000))
-logger.info(f"Training completed in {(milli_sec2 - milli_sec1) // 1000} seconds.")
-
-# Plotting Loss and ROUGE Scores
-epochs = range(1, len(train_loss_per_epoch) + 1)
-
-# Loss plot
-plt.figure()
-plt.plot(epochs, train_loss_per_epoch, label='Training Loss')
-plt.plot(epochs, val_loss_per_epoch, label='Validation Loss')
-plt.title('Training and Validation Loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
-plt.savefig('losses.png')
-plt.close()
-
-# ROUGE-L plot
-plt.figure()
-plt.plot(epochs, train_rouge_per_epoch, label='Training ROUGE-L')
-plt.plot(epochs, val_rouge_per_epoch, label='Validation ROUGE-L')
-plt.title('Training and Validation ROUGE-L Scores')
-plt.xlabel('Epochs')
-plt.ylabel('ROUGE-L')
-plt.legend()
-plt.savefig('rouge_scores.png')
-plt.close()
+            total_preds.extend(decoded_preds)
+            total_labels.extend(decoded_labels)
+    
+        # Compute average training loss
+        train_loss_per_epoch.append(train_loss / len(train_loader))
+    
+        # Compute ROUGE for training set
+        train_rouge_scores = rouge_metric.compute(predictions=total_preds, references=total_labels, use_stemmer=True)
+        # Check if ROUGE score is a scalar (float) or a detailed dictionary
+        if isinstance(train_rouge_scores["rougeL"], dict):
+            avg_train_rouge = train_rouge_scores["rougeL"].mid.fmeasure #* 100
+        else:
+            avg_train_rouge = train_rouge_scores["rougeL"] #* 100  # For scalar case
+        train_rouge_per_epoch.append(avg_train_rouge)
+    
+        # Validation
+        model.eval()
+        val_loss = 0
+        val_preds = []
+        val_labels = []
+    
+        with torch.no_grad():
+            for step_num_e, batch_data in enumerate(tqdm(val_loader, desc='Validation')):
+                input_ids, attention_mask, labels = [data.to(device) for data in batch_data]
+    
+                # Forward pass
+                outputs = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+                val_loss += outputs.loss.mean().item()
+                
+                # Collect predictions and actual labels for ROUGE
+                if torch.cuda.device_count() > 1:
+                    preds = model.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+                else:
+                    preds = model.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+                decoded_preds = tokenizer.batch_decode(preds, skip_special_tokens=True)
+                decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
+    
+                val_preds.extend(decoded_preds)
+                val_labels.extend(decoded_labels)
+    
+        # Compute average validation loss
+        val_loss_per_epoch.append(val_loss / len(val_loader))
+    
+        # Compute ROUGE for validation set
+        val_rouge_scores = rouge_metric.compute(predictions=val_preds, references=val_labels, use_stemmer=True)
+        # Check if ROUGE score is a scalar (float) or a detailed dictionary
+        if isinstance(val_rouge_scores["rougeL"], dict):
+            avg_val_rouge = val_rouge_scores["rougeL"].mid.fmeasure #* 100
+        else:
+            avg_val_rouge = val_rouge_scores["rougeL"] #* 100  # For scalar case
+        val_rouge_per_epoch.append(avg_val_rouge)
+        
+        logger.info(f"Epoch {epoch_num + 1}/{num_epochs} - Train Loss: {train_loss_per_epoch[-1]:.4f} - Valid Loss: {val_loss_per_epoch[-1]:.4f}")
+        logger.info(f"Epoch {epoch_num + 1}/{num_epochs} - Train ROUGE-L: {avg_train_rouge:.4f} - Valid ROUGE-L: {avg_val_rouge:.4f}")
+    
+        # Implement Early Stopping and Save Best Model
+        if avg_val_rouge > best_val_rouge:
+            best_val_rouge = avg_val_rouge
+            best_epoch = epoch_num + 1
+            no_improvement_counter = 0
+    
+            # Save the best model
+            #torch.save(model.state_dict(), save_path)
+            save_checkpoint(save_path, epoch_num+1, model, optimizer.state_dict(), lr_scheduler.state_dict(), train_loss_per_epoch, val_loss_per_epoch, train_rouge_per_epoch, val_rouge_per_epoch)
+            logger.info(f"Model saved at epoch {epoch_num + 1} with ROUGE-L: {best_val_rouge:.4f}")
+        else:
+            no_improvement_counter += 1
+    
+            if no_improvement_counter >= patience:
+                logger.info(f"Early stopping after {epoch_num + 1} epochs. Best epoch: {best_epoch} with ROUGE-L: {best_val_rouge:.4f}")
+                break
+    
+    # Training Complete
+    milli_sec2 = int(round(time.time() * 1000))
+    logger.info(f"Training completed in {(milli_sec2 - milli_sec1) // 1000} seconds.")
+    
+    # Plotting Loss and ROUGE Scores
+    epochs = range(1, len(train_loss_per_epoch) + 1)
+    
+    # Loss plot
+    plt.figure()
+    plt.plot(epochs, train_loss_per_epoch, label='Training Loss')
+    plt.plot(epochs, val_loss_per_epoch, label='Validation Loss')
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.savefig('losses.png')
+    plt.close()
+    
+    # ROUGE-L plot
+    plt.figure()
+    plt.plot(epochs, train_rouge_per_epoch, label='Training ROUGE-L')
+    plt.plot(epochs, val_rouge_per_epoch, label='Validation ROUGE-L')
+    plt.title('Training and Validation ROUGE-L Scores')
+    plt.xlabel('Epochs')
+    plt.ylabel('ROUGE-L')
+    plt.legend()
+    plt.savefig('rouge_scores.png')
+    plt.close()
 
 
 # Evaluation
 
-# In[ ]:
+# In[20]:
 
 
 # Load best model from checkpoint during training with early stopping
@@ -518,7 +513,7 @@ else:
 model.to(device)
 
 
-# In[ ]:
+# In[21]:
 
 
 # Make predictions on the testing set
@@ -555,7 +550,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[ ]:
+# In[22]:
 
 
 def extract_rouge_value(rouge_scores, rouge_key):
@@ -583,7 +578,7 @@ logger.info(f"ROUGE-L: {rougeL_score:.4f}")
 logger.info(f"ROUGE-Lsum: {rougeLsum_score:.4f}")
 
 
-# In[ ]:
+# In[23]:
 
 
 # Optionally, save the predictions and true labels for further analysis
@@ -595,7 +590,7 @@ with open('test_predictions.txt', 'w') as f_pred, open('test_actual_labels.txt',
 
 # Generating Vulnerable Lines (Inference)
 
-# In[ ]:
+# In[24]:
 
 
 # Function to generate vulnerable lines for a code snippet
@@ -610,13 +605,22 @@ def generate_vulnerable_lines(model, tokenizer, code_snippet, max_length):
     ).to(device)
 
     # Generate predicted vulnerable lines using the model
-    outputs = model.generate(
-        input_ids=inputs['input_ids'],
-        attention_mask=inputs['attention_mask'],
-        max_length=max_length,  # Maximum length for the generated sequence (vulnerable lines)
-        num_beams=4,  # Beam search for better results (you can adjust or remove for greedy search)
-        early_stopping=True  # Stop generating once the model reaches an end token
-    )
+    if torch.cuda.device_count() > 1:
+        outputs = model.module.generate(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask'],
+            max_length=max_length,  # Maximum length for the generated sequence (vulnerable lines)
+            num_beams=4,  # Beam search for better results (you can adjust or remove for greedy search)
+            early_stopping=True  # Stop generating once the model reaches an end token
+        )
+    else:
+        outputs = model.generate(
+            input_ids=inputs['input_ids'],
+            attention_mask=inputs['attention_mask'],
+            max_length=max_length,  # Maximum length for the generated sequence (vulnerable lines)
+            num_beams=4,  # Beam search for better results (you can adjust or remove for greedy search)
+            early_stopping=True  # Stop generating once the model reaches an end token
+        )
 
     vulnerable_lines = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return vulnerable_lines
@@ -639,22 +643,30 @@ print("Predicted Vulnerable Lines:")
 print(predicted_vulnerable_lines)
 
 
-# In[ ]:
+# In[44]:
 
 
 # Assuming your test dataset is loaded into a DataFrame called 'test_data'
 # Use the first sample from the test set (column 'processed_func' contains the source code)
-first_code_snippet = test_data['Text'].iloc[0]
+no_sample = 20 # 100
+first_code_snippet = test_data['Text'].iloc[no_sample]
 
 # Generate vulnerable lines for the first sample
-predicted_vulnerable_lines = generate_vulnerable_lines(model, tokenizer, first_code_snippet)
+predicted_vulnerable_lines = generate_vulnerable_lines(model, tokenizer, first_code_snippet, max_len_lines)
 
 # Output the result
 print("First Test Sample Code Snippet:")
 print(first_code_snippet)
 
 
-# In[ ]:
+# In[45]:
+
+
+print("\Actual Vulnerable Lines:")
+print(test_data['Lines'].iloc[no_sample])
+
+
+# In[46]:
 
 
 print("\nPredicted Vulnerable Lines:")
