@@ -3,7 +3,7 @@
 
 # <b> Line-level Vulnerability Detection</b>
 
-# In[1]:
+# In[59]:
 
 
 #!/usr/bin/env python
@@ -45,6 +45,7 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn.utils import shuffle
 
 import logging
+import openpyxl
 
 
 # Basic Configuration of logging and seed
@@ -578,14 +579,25 @@ logger.info(f"ROUGE-L: {rougeL_score:.4f}")
 logger.info(f"ROUGE-Lsum: {rougeLsum_score:.4f}")
 
 
-# In[23]:
+# In[60]:
 
 
-# Optionally, save the predictions and true labels for further analysis
-with open('test_predictions.txt', 'w') as f_pred, open('test_actual_labels.txt', 'w') as f_labels:
-    for pred, label in zip(test_preds, actual_labels):
-        f_pred.write(pred + "\n")
-        f_labels.write(label + "\n")
+# Save the source code, predictions, and true labels into a single file for further analysis
+with open('test_results.txt', 'w', encoding='utf-8') as f:
+    for code, pred, label in zip(test_data['Text'], test_preds, actual_labels):
+        f.write(f"Source Code:\n{code}\n{'-'*50}\n")
+        f.write(f"Actual Vulnerable Lines:\n{label}\n{'='*50}\n\n")
+        f.write(f"Predicted Vulnerable Lines:\n{pred}\n{'-'*50}\n")
+
+# Save the source code, predictions, and actual labels into an Excel file
+results_df = pd.DataFrame({
+    'Source Code': test_data['Text'],
+    'Actual Vulnerable Lines': actual_labels,
+    'Predicted Vulnerable Lines': test_preds
+})
+
+# Save the DataFrame to an Excel file
+results_df.to_excel('test_results.xlsx', index=False)
 
 
 # Generating Vulnerable Lines (Inference)
