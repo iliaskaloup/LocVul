@@ -44,6 +44,8 @@ from imblearn.under_sampling import RandomUnderSampler
 from sklearn.utils import shuffle
 
 import logging
+import statistics
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 # Basic Configuration of logging and seed
@@ -68,7 +70,7 @@ set_seed(seed)
 
 # Read data and model
 
-# In[4]:
+# In[3]:
 
 
 # Read dataset
@@ -76,7 +78,7 @@ root_path = os.getcwd()
 dataset = pd.read_csv(os.path.join(root_path, 'data', 'dataset.csv'))
 
 
-# In[5]:
+# In[4]:
 
 
 checkpoint_dir = './checkpoints'
@@ -88,14 +90,14 @@ save_path_seq2seq = os.path.join(checkpoint_dir_seq2seq, 'best_weights.pt')
 
 # Get tokenizer
 
-# In[6]:
+# In[5]:
 
 
 model_variation = "microsoft/codebert-base"
 tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True)
 
 
-# In[7]:
+# In[6]:
 
 
 model_variation_seq2seq = "Salesforce/codet5-base"
@@ -104,7 +106,7 @@ tokenizer_seq2seq = AutoTokenizer.from_pretrained(model_variation_seq2seq, do_lo
 
 # Split data sets and explore data
 
-# In[8]:
+# In[7]:
 
 
 # data split
@@ -156,7 +158,7 @@ del dataset
 
 # Pre-processing
 
-# In[9]:
+# In[8]:
 
 
 # Pre-processing step: Under-sampling
@@ -200,7 +202,7 @@ else:
 
 # Get model and apply tokenizer
 
-# In[10]:
+# In[9]:
 
 
 # Pre-trained model
@@ -272,7 +274,7 @@ X_test = tokenizer(
 
 # Model preparation
 
-# In[11]:
+# In[10]:
 
 
 # Hyper-parameters
@@ -288,7 +290,7 @@ optimizer = AdamW(model.parameters(),
                   )
 
 
-# In[12]:
+# In[11]:
 
 
 # Build Model
@@ -331,7 +333,7 @@ print(model.to(device))
 print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
-# In[13]:
+# In[12]:
 
 
 # Function to replace "/~/" with "\n" in the 'Lines' column
@@ -345,7 +347,7 @@ test_data = replace_delimiter_with_newline(test_data)
 
 # Execution loop
 
-# In[14]:
+# In[13]:
 
 
 # Load model
@@ -417,24 +419,7 @@ if REMOVE_MISSING_LINE_LABELS:
     logger.info(f"Classification Report:\n{new_class_report}")
 
 
-# In[15]:
-
-
-# Function to tokenize the function into lines and tokens
-def tokenize_function_to_lines_and_tokens(function_code, split_char):
-    # Split function into lines based on newline characters
-    lines = function_code.split(split_char)
-    
-    # Tokenize each line
-    tokenized_lines = []
-    for line in lines:
-        tokens = tokenizer.tokenize(line)
-        tokenized_lines.append(tokens)
-    
-    return lines, tokenized_lines
-
-
-# In[16]:
+# In[14]:
 
 
 # Identify negative predictions ie TN and FN
@@ -446,12 +431,12 @@ negative_samples = [test_data['Text'].tolist()[i] for i in negative_indices]  # 
 # Flatten
 all_neg_lines = []
 for neg_func in negative_samples:
-    neg_lines, _ = tokenize_function_to_lines_and_tokens(neg_func, '\n')
+    neg_lines = neg_func.split('\n') #function_to_lines
     for neg_line in neg_lines:
         all_neg_lines.append(neg_line)
 
 
-# In[17]:
+# In[15]:
 
 
 ONLY_TP_Accuracy = True
@@ -460,7 +445,7 @@ ONLY_TP_CostEffect = False
 ONLY_TP = ONLY_TP_Accuracy
 
 
-# In[18]:
+# In[16]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -477,7 +462,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[19]:
+# In[17]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -489,7 +474,30 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 # Apply Seq2Seq model
 
-# In[20]:
+# In[18]:
+
+
+# def tokenize_data_without_labels(tokenizer, positive_samples):
+#     input_encodings = tokenizer(
+#         positive_samples,
+#         max_length=512,
+#         truncation=True,
+#         padding='max_length',
+#         return_tensors='pt',
+#         add_special_tokens=True
+#     )
+    
+#     return input_encodings
+
+# # Tokenize the test data without labels
+# test_encodings = tokenize_data_without_labels(tokenizer_seq2seq, positive_samples)
+
+# # Create a TensorDataset only with input_ids and attention_mask (no labels)
+# test_dataset_seq2seq = TensorDataset(test_encodings['input_ids'], test_encodings['attention_mask'])
+# test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
+
+
+# In[19]:
 
 
 max_len_lines = 128
@@ -521,7 +529,7 @@ test_dataset_seq2seq = TensorDataset(test_encodings['input_ids'], test_encodings
 test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[21]:
+# In[20]:
 
 
 # Load the CodeT5 model
@@ -534,10 +542,10 @@ if torch.cuda.device_count() > 1:
     model_seq2seq.module.load_state_dict(checkpoint['model'])
 else:
     model_seq2seq.load_state_dict(checkpoint['model'])
-model_seq2seq.to(device)
+print(model_seq2seq.to(device))
 
 
-# In[67]:
+# In[21]:
 
 
 # Make predictions on the testing set
@@ -574,28 +582,174 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[68]:
+# In[ ]:
 
 
-positive_samples[1]
+# compute the average number of lines predicted as vulnerable by the seq2seq model
+pred_lens = []
+for i in range(0, len(test_preds)):
+    pred_lens.append(len(test_preds[i].split('\n')))
+mean_pred_len = statistics.mean(pred_lens)
+med_pred_len = statistics.median(pred_lens)
+logger.info(f"Mean predicted length: {mean_pred_len}")
+logger.info(f"Median predicted length: {med_pred_len}")
 
 
-# In[69]:
+# In[22]:
 
 
-positive_lines[1]
+def calc_accurary(test_preds, real_positive_lines):
+    accuracy = 0
+    for i in range(0, len(test_preds)):
+        if test_preds[i] == real_positive_lines[i]:
+            accuracy += 1
+    accuracy = accuracy / len(test_preds)
+    return accuracy
 
 
-# In[72]:
+# In[23]:
 
 
-test_preds[1]
+# compute simple accuracy: In how many functions the seq2seq model identified the vulnerable lines 100%
+accuracy = calc_accurary(test_preds, positive_lines)
+logger.info(f"Accuracy: {accuracy*100, '%'}")
 
 
-# In[70]:
+# In[24]:
 
 
-actual_labels[1]
+# compute simple accuracy with truncated output: In how many functions the seq2seq model identified the vulnerable lines 100%, 
+#considering the actual vulnerable lines truncated in max_len
+accuracy_trunc = calc_accurary(test_preds, actual_labels)
+logger.info(f"Accuracy on truncated labels: {accuracy_trunc*100, '%'}")
+
+
+# In[ ]:
+
+
+def get_line_embeddings(lines, tokenizer, model):
+    """
+    Get the embeddings for a list of lines using a CodeT5 model.
+    
+    Args:
+    lines (list of str): The lines of code to embed.
+    tokenizer: The tokenizer for the CodeT5 model.
+    model: The CodeT5 model.
+    
+    Returns:
+    embeddings (torch.Tensor): A tensor containing the embeddings for each line.
+    """
+    # Tokenize the input lines
+    inputs = tokenizer(lines, padding=True, truncation=True, return_tensors="pt")
+    
+    # Move inputs to the same device as the model
+    device = next(model.parameters()).device
+    inputs = {key: value.to(device) for key, value in inputs.items()}
+    
+    # Get the model output
+    with torch.no_grad():
+        outputs = model.encoder(**inputs)
+    
+    # Extract the last hidden state
+    hidden_states = outputs.last_hidden_state  # Shape: (batch_size, seq_len, hidden_dim)
+    
+    # To get a single embedding per line, we can mean-pool the hidden states across the sequence dimension
+    # or use just the first token's representation, depending on your task.
+    # Here, we'll use mean-pooling:
+    embeddings = hidden_states.mean(dim=1)  # Shape: (batch_size, hidden_dim)
+    
+    return embeddings.cpu().numpy()  # Return the embeddings as a NumPy array
+    
+
+def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
+    """
+    Find the most similar line from original lines based on cosine similarity.
+    """
+    
+    predicted_embedding = get_line_embeddings([predicted_line], tokenizer, model)[0]
+    original_embeddings = get_line_embeddings(original_lines, tokenizer, model)
+
+    cosine_similarities = cosine_similarity([predicted_embedding], original_embeddings).flatten()
+    
+    # lines = [predicted_line] + original_lines  # Combine predicted with original lines
+    
+    # # Compute TF-IDF matrix
+    # vectorizer = TfidfVectorizer().fit_transform(lines)
+    # vectors = vectorizer.toarray()
+    
+    # # Calculate cosine similarity between the first line (predicted) and the rest
+    # cosine_similarities = cosine_similarity([vectors[0]], vectors[1:])
+    
+    most_similar_idx = np.argmax(cosine_similarities)  # Find the index of the most similar line
+    
+    return original_lines[most_similar_idx]
+
+
+# # compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
+# test_preds_similar = []
+# for i, pred in enumerate(test_preds):
+#     predicted_lines  = pred.split('\n')
+#     original_lines  = positive_samples[i].split('\n')
+#     similar_str = ''
+#     for j, predicted_line in enumerate(predicted_lines):
+#         if predicted_line not in original_lines and j < len(predicted_lines)-1: # to avoid to spoil a correct line AND to just to avoid a difference with the actual_labels in the evaluation
+#             similar_line = get_most_similar_line(predicted_line, original_lines, tokenizer_seq2seq, model_seq2seq)
+#         else:
+#             similar_line = predicted_line
+#         if j == 0:
+#             similar_str += similar_line
+#         else:
+#             similar_str += '\n' + similar_line
+            
+#     test_preds_similar.append(similar_str) 
+
+# accuracy_similar = calc_accurary(test_preds_similar, positive_lines)
+# logger.info(f"Accuracy: {accuracy_similar*100, '%'}")
+
+# accuracy_similar_trunc = calc_accurary(test_preds_similar, actual_labels)
+# logger.info(f"Accuracy on truncated labels: {accuracy_similar_trunc*100, '%'}")
+
+
+# In[207]:
+
+
+num=9
+
+
+# In[208]:
+
+
+print(positive_samples[num])
+
+
+# In[209]:
+
+
+print(positive_lines[num])
+
+
+# In[210]:
+
+
+print(actual_labels[num])
+
+
+# In[211]:
+
+
+print(test_preds[num])
+
+
+# In[212]:
+
+
+print(test_preds[num] == actual_labels[num])
+
+
+# In[213]:
+
+
+print(test_preds[num] == positive_lines[num])
 
 
 # In[ ]:
