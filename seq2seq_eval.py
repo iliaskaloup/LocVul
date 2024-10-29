@@ -3,7 +3,7 @@
 
 # <b>Evaluation Scheme for line-level Vulnerability Detection using Seq2Seq models</b>
 
-# In[1]:
+# In[127]:
 
 
 #!/usr/bin/env python
@@ -45,6 +45,7 @@ from sklearn.utils import shuffle
 
 import logging
 import statistics
+import math
 from sklearn.metrics.pairwise import cosine_similarity
 
 
@@ -84,7 +85,7 @@ dataset = pd.read_csv(os.path.join(root_path, 'data', 'dataset.csv'))
 checkpoint_dir = './checkpoints'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
-checkpoint_dir_seq2seq = './checkpoints_seq2seq'
+checkpoint_dir_seq2seq = './checkpoints_seq2seq_512'
 save_path_seq2seq = os.path.join(checkpoint_dir_seq2seq, 'best_weights.pt')
 
 
@@ -436,16 +437,16 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[15]:
+# In[110]:
 
 
 ONLY_TP_Accuracy = True
 ONLY_TP_CostEffect = False
 
-ONLY_TP = ONLY_TP_Accuracy
+ONLY_TP = ONLY_TP_CostEffect
 
 
-# In[16]:
+# In[111]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -462,19 +463,20 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[17]:
+# In[128]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
 
 positive_lines = [test_data['Lines'].tolist()[i] for i in positive_indices]
+positive_lines = ["" if isinstance(x, float) and math.isnan(x) else x for x in positive_lines]
 
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
 # Apply Seq2Seq model
 
-# In[18]:
+# In[113]:
 
 
 # def tokenize_data_without_labels(tokenizer, positive_samples):
@@ -497,10 +499,10 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 # test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[19]:
+# In[132]:
 
 
-max_len_lines = 128
+max_len_lines = 512
 def tokenize_data(tokenizer, positive_samples, positive_lines, max_len_lines):
     input_encodings = tokenizer(
         positive_samples,
@@ -529,7 +531,7 @@ test_dataset_seq2seq = TensorDataset(test_encodings['input_ids'], test_encodings
 test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[20]:
+# In[133]:
 
 
 # Load the CodeT5 model
@@ -545,7 +547,7 @@ else:
 print(model_seq2seq.to(device))
 
 
-# In[21]:
+# In[134]:
 
 
 # Make predictions on the testing set
@@ -582,7 +584,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[ ]:
+# In[139]:
 
 
 # compute the average number of lines predicted as vulnerable by the seq2seq model
@@ -595,7 +597,7 @@ logger.info(f"Mean predicted length: {mean_pred_len}")
 logger.info(f"Median predicted length: {med_pred_len}")
 
 
-# In[22]:
+# In[140]:
 
 
 def calc_accurary(test_preds, real_positive_lines):
@@ -607,7 +609,7 @@ def calc_accurary(test_preds, real_positive_lines):
     return accuracy
 
 
-# In[23]:
+# In[141]:
 
 
 # compute simple accuracy: In how many functions the seq2seq model identified the vulnerable lines 100%
@@ -615,7 +617,7 @@ accuracy = calc_accurary(test_preds, positive_lines)
 logger.info(f"Accuracy: {accuracy*100, '%'}")
 
 
-# In[24]:
+# In[142]:
 
 
 # compute simple accuracy with truncated output: In how many functions the seq2seq model identified the vulnerable lines 100%, 
@@ -624,8 +626,10 @@ accuracy_trunc = calc_accurary(test_preds, actual_labels)
 logger.info(f"Accuracy on truncated labels: {accuracy_trunc*100, '%'}")
 
 
-# In[ ]:
+# In[143]:
 
+
+# compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
 
 def get_line_embeddings(lines, tokenizer, model):
     """
@@ -685,7 +689,6 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
     return original_lines[most_similar_idx]
 
 
-# # compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
 # test_preds_similar = []
 # for i, pred in enumerate(test_preds):
 #     predicted_lines  = pred.split('\n')
@@ -710,63 +713,86 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
 # logger.info(f"Accuracy on truncated labels: {accuracy_similar_trunc*100, '%'}")
 
 
-# In[207]:
+# In[267]:
 
 
-num=9
+num=0
 
 
-# In[208]:
+# In[268]:
 
 
 print(positive_samples[num])
 
 
-# In[209]:
+# In[269]:
+
+
+print(positive_samples[num])
+
+
+# In[270]:
 
 
 print(positive_lines[num])
 
 
-# In[210]:
+# In[271]:
 
 
 print(actual_labels[num])
 
 
-# In[211]:
+# In[272]:
 
 
 print(test_preds[num])
 
 
-# In[212]:
+# In[273]:
 
 
 print(test_preds[num] == actual_labels[num])
 
 
-# In[213]:
+# In[177]:
 
 
 print(test_preds[num] == positive_lines[num])
 
 
-# In[ ]:
+# Rank the lines based on the predictions of the seq2seq model and their position in the original functions
+
+# In[254]:
 
 
-# Create a list of tuples containing (line_index, line_text, lime_score)
-line_scores_with_text = [(line_idx, line, line_scores[line_idx]) for line_idx, line in enumerate(lines)]
-all_lines.append(line_scores_with_text)
+all_ranked_lines = []
 
-# Sort the lines by score in descending order
-ranked_lines = sorted(line_scores_with_text, key=lambda x: x[2], reverse=True)
-all_ranked_lines.append(ranked_lines)
+# the ranked list per function will contain first the predicted lines by the seq2seq model and then the rest lines of the original function 
+# with order based on their original position
+all_predicted_lines = []
+for pred in test_preds:
+    predicted_lines = pred.split('\n')
+    all_predicted_lines.append(predicted_lines)
+    all_ranked_lines.append(predicted_lines.copy())
+
+for i, pos_sample in enumerate(positive_samples):
+    original_lines = pos_sample.split('\n')
+    for orig_line in original_lines:
+        if orig_line not in all_predicted_lines[i]:
+            all_ranked_lines[i].append(orig_line)
+
+# restructure labels
+str_labels = positive_lines # actual_labels # positive_lines
+all_flaw_lines = []
+for label in str_labels:
+    label_lines = label.split('\n')
+    all_flaw_lines.append(label_lines)
 
 
 # Line-level Evaluation
 
-# In[26]:
+# In[259]:
 
 
 # Accuracy metrics
@@ -782,31 +808,9 @@ def compute_top_x_accuracy(ranked_lines, flaw_lines, top_x=10):
     :return: 1 if at least one vulnerable line is in the top-X, else 0.
     """
     top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
-    # top_x_lines = []
-    # count = 0
-    # for line3 in ranked_lines:
-    #     line = line3[1]
-    #     if line != "":
-    #         top_x_lines.append(line3[0])
-    #         count+=1
-    #         if count>=top_x:
-    #             break
-    return 1 if any(line_index in flaw_lines for line_index, _, _ in top_x_lines) else 0
-    #return 1 if any(line_index in flaw_lines for line_index in top_x_lines) else 0
 
-# Helper function to parse flaw lines
-def parse_flaw_lines(flaw_line_str):
-    """
-    Parse flaw_line string into a list of integers.
-    
-    :param flaw_line_str: A string of comma-separated line numbers (e.g., '36,37,40').
-    :return: List of integers representing the flaw lines.
-    """
-    if pd.isna(flaw_line_str) or flaw_line_str == '':
-        return []
-    else:
-        return [int(x) for x in flaw_line_str.split(',')]
-        
+    return 1 if any(line in flaw_lines for line in top_x_lines) else 0
+            
 # Function to compute Initial False Alarm (IFA)
 def compute_ifa(ranked_lines, flaw_lines):
     """
@@ -817,8 +821,8 @@ def compute_ifa(ranked_lines, flaw_lines):
     :return: Number of false alarms until the first vulnerable line is found.
     """
     ifa = 0
-    for line_index, _, _ in ranked_lines:
-        if line_index not in flaw_lines:
+    for line in ranked_lines:
+        if line not in flaw_lines:
             ifa += 1
         else:
             break  # Stop counting when the first vulnerable line is found
@@ -837,9 +841,8 @@ def compute_total_loc(all_total_locs):
 
 def compute_total_flaw_lines(all_flaw_lines):
     total_flaw_loc = 0
-    for line_str in all_flaw_lines:
-        line_int = parse_flaw_lines(line_str)
-        total_flaw_loc+=len(line_int)
+    for flaw_lines in all_flaw_lines:
+        total_flaw_loc+=len(flaw_lines)
 
     return total_flaw_loc
 
@@ -1029,11 +1032,11 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[29]:
+# In[260]:
 
 
 # Function to evaluate all metrics for each function
-def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines, all_flaw_lines_text, top_x=10):
+def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10):
     """
     Evaluate the XAI methods using Top-X Accuracy, IFA, Effort@X%Recall, Recall@X%LOC for all functions.
 
@@ -1044,16 +1047,8 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines
     """
     results = []
     for i, ranked_lines in enumerate(all_ranked_lines):
-
-        # check whether the flaws reside beyond the max_len of the model
-        #beyond = check_beyond_token_limit(all_lines[i], all_flaw_lines_text[i])      
-
-        #if beyond == False:
         
-        flaw_line_index = all_flaw_lines[i]
-
-        # Even if there are no flaw lines, we still compute line-level evaluation for false positives
-        flaw_lines = parse_flaw_lines(flaw_line_index) if pd.notna(flaw_line_index) else []
+        flaw_lines = all_flaw_lines[i]
         
         # Compute each metric
         top_x_accuracy = compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
@@ -1090,29 +1085,24 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines
     return final_results_df
 
 
-# In[ ]:
-
-
-# Prepare data for line-level evaluation
-
-all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in positive_indices]  # Extract the flaw line indexes for each positive sample
-all_flaw_lines_text = [test_data['Lines'].tolist()[i] for i in positive_indices]  # Extract the flaw lines for each positive sample
-#all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in positive_indices]  # Compute total LOC for each positive sample
-
-test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_positive_indices] # Extract the flaw line indexes for each actual positive sample
-test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
-
-
-# In[ ]:
+# In[261]:
 
 
 # Accuracy Results
 
 # Usage:
-final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines, all_flaw_lines_text, top_x=10)
+final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
 
 # Display Accuracy Results per Function
 print(final_results_df)
+
+
+# In[ ]:
+
+
+# Prepare data for line-level evaluation of cost-effectiveness
+test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_positive_indices] # Extract the flaw line indexes for each actual positive sample
+test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
 # In[ ]:
