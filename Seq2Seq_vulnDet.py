@@ -245,7 +245,7 @@ if max_len_lines > 512:
 else:
     max_len_lines = max_len_lines
 logger.info(f"Maximum tokenized length of Lines: {max_len_lines}")
-max_len_lines = 128
+#max_len_lines = 128
 
 
 # In[14]:
