@@ -1136,7 +1136,7 @@ for idx, explanation in enumerate(explanation_results):
 
 # Line-level Evaluation
 
-# In[120]:
+# In[128]:
 
 
 # Accuracy metrics
@@ -1210,7 +1210,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[121]:
+# In[129]:
 
 
 # Function to compute Top-X Precision for each function
@@ -1253,10 +1253,10 @@ def compute_top_x_recall(ranked_lines, flaw_lines, top_x):
         if line_index in flaw_lines:
             count += 1
 
-    return count / len(flaw_lines)
+    return count / len(flaw_lines) if len(flaw_lines)>0 else 0
 
 
-# In[122]:
+# In[130]:
 
 
 def compute_average_precision_at_k(ranked_lines, flaw_lines, k):
@@ -1297,12 +1297,12 @@ def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
     for i, (line_index, _, _) in enumerate(top_k_lines):
         if line_index in flaw_lines:
             relevant_found += 1
-            precision_sum += relevant_found / len(flaw_lines)  # Precision at this rank
+            precision_sum += relevant_found / len(flaw_lines)  if len(flaw_lines)>0 else 0 # Precision at this rank
 
     return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
 
 
-# In[123]:
+# In[131]:
 
 
 # Cost-Effectiveness metrics
@@ -1506,7 +1506,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[124]:
+# In[132]:
 
 
 # def check_beyond_token_limit(lines_text, flaw_lines_text):
@@ -1530,7 +1530,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
 #     return beyond
 
 
-# In[125]:
+# In[133]:
 
 
 # Function to evaluate all metrics for each function
@@ -1608,7 +1608,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines
     return final_results_df
 
 
-# In[126]:
+# In[134]:
 
 
 # Prepare data for line-level evaluation
@@ -1621,7 +1621,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[127]:
+# In[135]:
 
 
 # Results based on per function accuracy
@@ -1634,7 +1634,7 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[ ]:
+# In[136]:
 
 
 # Results based on the total of lines
@@ -1652,7 +1652,7 @@ else: #sort_by_lines == True
     
 
 
-# In[ ]:
+# In[137]:
 
 
 # Display Final Evaluation Results
@@ -1674,7 +1674,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[ ]:
+# In[138]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1694,7 +1694,7 @@ print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
 # Comparison with sota
 
-# In[ ]:
+# In[139]:
 
 
 # Define metrics
