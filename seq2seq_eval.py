@@ -3,7 +3,7 @@
 
 # <b>Evaluation Scheme for line-level Vulnerability Detection using Seq2Seq models</b>
 
-# In[127]:
+# In[1]:
 
 
 #!/usr/bin/env python
@@ -437,16 +437,16 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[286]:
+# In[49]:
 
 
 ONLY_TP_Accuracy = True
 ONLY_TP_CostEffect = False
 
-ONLY_TP = ONLY_TP_Accuracy
+ONLY_TP = ONLY_TP_CostEffect
 
 
-# In[287]:
+# In[50]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -463,7 +463,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[288]:
+# In[51]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -474,9 +474,15 @@ positive_lines = ["" if isinstance(x, float) and math.isnan(x) else x for x in p
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
+# In[122]:
+
+
+len("".split('\n'))
+
+
 # Apply Seq2Seq model
 
-# In[289]:
+# In[52]:
 
 
 # def tokenize_data_without_labels(tokenizer, positive_samples):
@@ -499,7 +505,7 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 # test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[290]:
+# In[53]:
 
 
 max_len_lines = 512
@@ -531,7 +537,7 @@ test_dataset_seq2seq = TensorDataset(test_encodings['input_ids'], test_encodings
 test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[291]:
+# In[54]:
 
 
 # Load the CodeT5 model
@@ -547,7 +553,7 @@ else:
 print(model_seq2seq.to(device))
 
 
-# In[ ]:
+# In[55]:
 
 
 # Make predictions on the testing set
@@ -584,7 +590,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[ ]:
+# In[56]:
 
 
 # compute the average number of lines predicted as vulnerable by the seq2seq model
@@ -597,7 +603,20 @@ logger.info(f"Mean predicted length: {mean_pred_len}")
 logger.info(f"Median predicted length: {med_pred_len}")
 
 
-# In[ ]:
+# In[99]:
+
+
+# compute the average number of lines that are actual vulnerable lines
+actual_vuln_lens = []
+for i in range(0, len(positive_lines)):
+    actual_vuln_lens.append(len(positive_lines[i].split('\n')))
+mean_actual_vuln_len = statistics.mean(actual_vuln_lens)
+med_actual_vuln_len = statistics.median(actual_vuln_lens)
+logger.info(f"Mean actual flaw length: {mean_actual_vuln_len}")
+logger.info(f"Median actual flaw length: {med_actual_vuln_len}")
+
+
+# In[57]:
 
 
 def calc_accurary(test_preds, real_positive_lines):
@@ -609,7 +628,7 @@ def calc_accurary(test_preds, real_positive_lines):
     return accuracy
 
 
-# In[ ]:
+# In[58]:
 
 
 # compute simple accuracy: In how many functions the seq2seq model identified the vulnerable lines 100%
@@ -617,7 +636,7 @@ accuracy = calc_accurary(test_preds, positive_lines)
 logger.info(f"Accuracy: {accuracy*100, '%'}")
 
 
-# In[ ]:
+# In[59]:
 
 
 # compute simple accuracy with truncated output: In how many functions the seq2seq model identified the vulnerable lines 100%, 
@@ -626,7 +645,7 @@ accuracy_trunc = calc_accurary(test_preds, actual_labels)
 logger.info(f"Accuracy on truncated labels: {accuracy_trunc*100, '%'}")
 
 
-# In[ ]:
+# In[60]:
 
 
 # compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
@@ -713,49 +732,43 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
 # logger.info(f"Accuracy on truncated labels: {accuracy_similar_trunc*100, '%'}")
 
 
-# In[ ]:
+# In[114]:
 
 
-num=0
+num=25
 
 
-# In[ ]:
-
-
-print(positive_samples[num])
-
-
-# In[ ]:
+# In[115]:
 
 
 print(positive_samples[num])
 
 
-# In[ ]:
+# In[116]:
 
 
 print(positive_lines[num])
 
 
-# In[ ]:
+# In[117]:
 
 
 print(actual_labels[num])
 
 
-# In[ ]:
+# In[118]:
 
 
 print(test_preds[num])
 
 
-# In[ ]:
+# In[119]:
 
 
 print(test_preds[num] == actual_labels[num])
 
 
-# In[ ]:
+# In[120]:
 
 
 print(test_preds[num] == positive_lines[num])
@@ -763,7 +776,7 @@ print(test_preds[num] == positive_lines[num])
 
 # Rank the lines based on the predictions of the seq2seq model and their position in the original functions
 
-# In[ ]:
+# In[68]:
 
 
 all_ranked_lines = []
@@ -794,13 +807,13 @@ for label in str_labels:
 
 # Line-level Evaluation
 
-# In[ ]:
+# In[69]:
 
 
 # Accuracy metrics
 
 # Function to compute Top-X Accuracy for each function
-def compute_top_x_accuracy(ranked_lines, flaw_lines, top_x=10):
+def compute_top_x_accuracy(ranked_lines, flaw_lines, top_x):
     """
     Compute Top-X Accuracy: Measures whether at least one actual vulnerable line appears in the top-X ranking.
     
@@ -812,7 +825,24 @@ def compute_top_x_accuracy(ranked_lines, flaw_lines, top_x=10):
     top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
 
     return 1 if any(line in flaw_lines for line in top_x_lines) else 0
-            
+
+
+def compute_reciprocal_rank(ranked_lines, flaw_lines, top_x):
+    """
+    Compute Reciprocal Rank for a single function.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices (integers).
+    :return: Reciprocal rank for this function, or 0 if no vulnerable line is found in the ranking.
+    """
+
+    top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
+    for i, line in enumerate(top_x_lines):
+        if line in flaw_lines:
+            return 1 / (i + 1)  # Reciprocal of the rank of the first relevant item
+    return 0  # If no relevant item is found
+    
+
 # Function to compute Initial False Alarm (IFA)
 def compute_ifa(ranked_lines, flaw_lines):
     """
@@ -831,7 +861,100 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[ ]:
+# In[70]:
+
+
+# Function to compute Top-X Precision for each function
+def compute_top_x_precision(ranked_lines, flaw_lines, top_x):
+    """
+    Compute Top-X Precision: Measures how many lines are indeed vulnerable in the top-X ranking.
+
+    Relevant retrieved instances divided by all retrieved instances
+    
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices (integers).
+    :param top_x: The number of top lines to consider (default is 10).
+    :return: Number of the number of vulnerable lines included in the top-X ranking divided by X.
+    """
+    top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
+
+    count = 0
+    for line in top_x_lines:
+        if line in flaw_lines:
+            count += 1
+
+    return count / top_x
+
+
+# Function to compute Top-X Recall for each function
+def compute_top_x_recall(ranked_lines, flaw_lines, top_x):
+    """
+    Compute Top-X Recall: Measures how many of the function's vulnerable lines can be found by searching in the top-X ranking.
+
+    Relevant retrieved instances divided by all relevant instances
+    
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices (integers).
+    :param top_x: The number of top lines to consider (default is 10).
+    :return: Number of the number of vulnerable lines included in the top-X ranking divided by the total number of vulnerable lines in the function.
+    """
+    top_x_lines = ranked_lines[:top_x]  # Get the top-X ranked lines
+
+    count = 0
+    for line in top_x_lines:
+        if line in flaw_lines:
+            count += 1
+
+    return count / len(flaw_lines)
+
+
+# In[71]:
+
+
+def compute_average_precision_at_k(ranked_lines, flaw_lines, k):
+    """
+    Compute Average Precision at K for a single function.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices (integers).
+    :param k: The number of top lines to consider for AP@K.
+    :return: Average Precision at K for this function.
+    """
+    relevant_found = 0
+    precision_sum = 0
+    top_k_lines = ranked_lines[:k]  # Consider only the top K lines
+
+    for i, line in enumerate(top_k_lines):
+        if line in flaw_lines:
+            relevant_found += 1
+            precision_sum += relevant_found / (i + 1)  # Precision at this rank
+
+    return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
+    #return precision_sum / min(k, len(flaw_lines)) if flaw_lines else 0  # Avoid division by zero
+
+
+def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
+    """
+    Compute Average Recall at K for a single function.
+
+    :param ranked_lines: List of tuples (line_index, line_text, score) sorted by score.
+    :param flaw_lines: List of actual vulnerable line indices (integers).
+    :param k: The number of top lines to consider for AR@K.
+    :return: Average Recall at K for this function.
+    """
+    relevant_found = 0
+    precision_sum = 0
+    top_k_lines = ranked_lines[:k]  # Consider only the top K lines
+
+    for i, line in enumerate(top_k_lines):
+        if line in flaw_lines:
+            relevant_found += 1
+            precision_sum += relevant_found / len(flaw_lines)  # Precision at this rank
+
+    return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
+
+
+# In[72]:
 
 
 # Cost-Effectiveness metrics
@@ -1035,11 +1158,11 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[ ]:
+# In[73]:
 
 
 # Function to evaluate all metrics for each function
-def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10):
+def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x):
     """
     Evaluate the XAI methods using Top-X Accuracy, IFA, Effort@X%Recall, Recall@X%LOC for all functions.
 
@@ -1055,10 +1178,27 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
         
         # Compute each metric
         top_x_accuracy = compute_top_x_accuracy(ranked_lines, flaw_lines, top_x)
+
+        top_x_precision = compute_top_x_precision(ranked_lines, flaw_lines, top_x)
+
+        top_x_recall = compute_top_x_recall(ranked_lines, flaw_lines, top_x)
+
+        rr = compute_reciprocal_rank(ranked_lines, flaw_lines, top_x)
+
+        apk = compute_average_precision_at_k(ranked_lines, flaw_lines, top_x)
+
+        ark = compute_average_recall_at_k(ranked_lines, flaw_lines, top_x)
+
+        
         ifa = compute_ifa(ranked_lines, flaw_lines)
 
         result = {
             f'Top-{top_x} Accuracy': top_x_accuracy,
+            f'Top-{top_x} Precision': top_x_precision,
+            f'Top-{top_x} Recall': top_x_recall,
+            f'Reciprocal Rank-{top_x}': rr,
+            f'AP@{top_x}': apk,
+            f'AR@{top_x}': ark,
             'IFA': ifa
         }
         
@@ -1088,19 +1228,20 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
     return final_results_df
 
 
-# In[ ]:
+# In[74]:
 
 
-# Accuracy Results
+# Results based on per function accuracy
 
 # Usage:
-final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x=10)
+top_x = 10
+final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x)
 
 # Display Accuracy Results per Function
 print(final_results_df)
 
 
-# In[ ]:
+# In[75]:
 
 
 # Prepare data for line-level evaluation of cost-effectiveness
@@ -1108,10 +1249,10 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[ ]:
+# In[76]:
 
 
-# Cost Effectiveness Results
+# Results based on the total of lines
 
 # configure sorting choice
 sort_by_lines = True # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
@@ -1126,26 +1267,42 @@ else: #sort_by_lines == True
     
 
 
-# In[ ]:
+# In[77]:
 
 
 # Display Final Evaluation Results
-top10acc = final_results_df["Top-10 Accuracy"].tolist()[-2]
+top10acc = final_results_df[f'Top-{top_x} Accuracy'].tolist()[-2]
+top_precision = final_results_df[f'Top-{top_x} Precision'].tolist()[-2]
+top_recall = final_results_df[f'Top-{top_x} Recall'].tolist()[-2]
+top_mrr = final_results_df[f'Reciprocal Rank-{top_x}'].tolist()[-2]
+top_map = final_results_df[f'AP@{top_x}'].tolist()[-2]
+top_mar = final_results_df[f'AR@{top_x}'].tolist()[-2]
 ifa = final_results_df["IFA"].tolist()[-1]
-print(f"Top-10 Accuracy: {top10acc}")
+print(f"Top-{top_x} Accuracy: {top10acc}")
+print(f"Top-{top_x} Precision: {top_precision}")
+print(f"Top-{top_x} Recall: {top_recall}")
+print(f"Top-{top_x} Reciprocal Rank: {top_mrr}")
+print(f"Top-{top_x} MAP: {top_map}")
+print(f"Top-{top_x} MAR: {top_mar}")
 print(f"Median IFA: {ifa}")
-
 print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[ ]:
+# In[78]:
 
 
 # Display Final Evaluation Results in Percentages
-print(f"Top-10 Accuracy: {round(top10acc * 100, 1)}%")
+print("Accuracy results:")
+print(f"Top-{top_x} Accuracy: {round(top10acc * 100, 1)}%")
+print(f"Top-{top_x} Precision: {round(top_precision * 100, 1)}%")
+print(f"Top-{top_x} Recall: {round(top_recall * 100, 1)}%")
+print(f"Top-{top_x} MRR: {round(top_mrr * 100, 1)}%")
+print(f"Top-{top_x} MAP: {round(top_map * 100, 1)}%")
+print(f"Top-{top_x} MAR: {round(top_mar * 100, 1)}%")
+print("\n")
+print("Cost-effectiveness results:")
 print(f"Median IFA: {round(ifa, 1)}")
-
 print(f"Effort@20%Recall: {round(effortXrecall * 100, 1)}%")
 print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
