@@ -474,12 +474,6 @@ positive_lines = ["" if isinstance(x, float) and math.isnan(x) else x for x in p
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
-# In[122]:
-
-
-len("".split('\n'))
-
-
 # Apply Seq2Seq model
 
 # In[52]:
@@ -590,7 +584,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[56]:
+# In[177]:
 
 
 # compute the average number of lines predicted as vulnerable by the seq2seq model
@@ -603,7 +597,7 @@ logger.info(f"Mean predicted length: {mean_pred_len}")
 logger.info(f"Median predicted length: {med_pred_len}")
 
 
-# In[99]:
+# In[178]:
 
 
 # compute the average number of lines that are actual vulnerable lines
@@ -616,7 +610,7 @@ logger.info(f"Mean actual flaw length: {mean_actual_vuln_len}")
 logger.info(f"Median actual flaw length: {med_actual_vuln_len}")
 
 
-# In[57]:
+# In[179]:
 
 
 def calc_accurary(test_preds, real_positive_lines):
@@ -628,7 +622,7 @@ def calc_accurary(test_preds, real_positive_lines):
     return accuracy
 
 
-# In[58]:
+# In[180]:
 
 
 # compute simple accuracy: In how many functions the seq2seq model identified the vulnerable lines 100%
@@ -636,7 +630,7 @@ accuracy = calc_accurary(test_preds, positive_lines)
 logger.info(f"Accuracy: {accuracy*100, '%'}")
 
 
-# In[59]:
+# In[181]:
 
 
 # compute simple accuracy with truncated output: In how many functions the seq2seq model identified the vulnerable lines 100%, 
@@ -645,7 +639,7 @@ accuracy_trunc = calc_accurary(test_preds, actual_labels)
 logger.info(f"Accuracy on truncated labels: {accuracy_trunc*100, '%'}")
 
 
-# In[60]:
+# In[182]:
 
 
 # compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
@@ -732,43 +726,43 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
 # logger.info(f"Accuracy on truncated labels: {accuracy_similar_trunc*100, '%'}")
 
 
-# In[114]:
+# In[183]:
 
 
 num=25
 
 
-# In[115]:
+# In[184]:
 
 
 print(positive_samples[num])
 
 
-# In[116]:
+# In[185]:
 
 
 print(positive_lines[num])
 
 
-# In[117]:
+# In[186]:
 
 
 print(actual_labels[num])
 
 
-# In[118]:
+# In[187]:
 
 
 print(test_preds[num])
 
 
-# In[119]:
+# In[188]:
 
 
 print(test_preds[num] == actual_labels[num])
 
 
-# In[120]:
+# In[189]:
 
 
 print(test_preds[num] == positive_lines[num])
@@ -776,7 +770,7 @@ print(test_preds[num] == positive_lines[num])
 
 # Rank the lines based on the predictions of the seq2seq model and their position in the original functions
 
-# In[68]:
+# In[190]:
 
 
 all_ranked_lines = []
@@ -807,7 +801,7 @@ for label in str_labels:
 
 # Line-level Evaluation
 
-# In[69]:
+# In[191]:
 
 
 # Accuracy metrics
@@ -861,7 +855,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[70]:
+# In[192]:
 
 
 # Function to compute Top-X Precision for each function
@@ -908,7 +902,7 @@ def compute_top_x_recall(ranked_lines, flaw_lines, top_x):
     return count / len(flaw_lines)
 
 
-# In[71]:
+# In[193]:
 
 
 def compute_average_precision_at_k(ranked_lines, flaw_lines, k):
@@ -954,7 +948,7 @@ def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
     return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
 
 
-# In[72]:
+# In[211]:
 
 
 # Cost-Effectiveness metrics
@@ -986,14 +980,14 @@ def sort_all_ranked_lines(positive_probas, all_ranked_lines):
     
     return all_ranked_lines_sorted
 
-# Sort the flaw_lines based on their function proba
-def sort_all_flaw_lines(positive_probas, all_flaw_lines):
+# # Sort the flaw_lines based on their function proba
+# def sort_all_flaw_lines(positive_probas, all_flaw_lines):
 
-    combined = list(zip(positive_probas, all_flaw_lines))
-    combined_sorted = sorted(combined, key=lambda x: x[0], reverse=True)
-    all_flaw_lines_sorted = [item[1] for item in combined_sorted]
+#     combined = list(zip(positive_probas, all_flaw_lines))
+#     combined_sorted = sorted(combined, key=lambda x: x[0], reverse=True)
+#     all_flaw_lines_sorted = [item[1] for item in combined_sorted]
 
-    return all_flaw_lines_sorted
+#     return all_flaw_lines_sorted
     
 
 # Function to compute Effort@X%Recall by sorting functions
@@ -1001,7 +995,8 @@ def compute_effort_at_x_percent_recall_rankedFuncs(all_ranked_lines, positive_pr
 
     # Prepare data for Cost-Effectiveness calculation
     all_ranked_lines_sorted = sort_all_ranked_lines(positive_probas, all_ranked_lines)
-    all_flaw_lines_sorted = sort_all_flaw_lines(positive_probas, all_flaw_lines)
+    #all_flaw_lines_sorted = sort_all_flaw_lines(positive_probas, all_flaw_lines)
+    all_flaw_lines_sorted = sort_all_ranked_lines(positive_probas, all_flaw_lines)
     
     total_test_loc = compute_total_loc(all_total_locs)
 
@@ -1057,11 +1052,50 @@ def create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines, all_predic
     
     return sorted_lines_with_labels
 
+# Assign labels for all sorted lines and sorted functions
+def create_sorted_lines_with_labels_and_probas(all_ranked_lines, positive_probas, all_flaw_lines, all_predicted_lines_number):
+
+    all_ranked_lines_sorted = sort_all_ranked_lines(positive_probas, all_ranked_lines)
+    all_flaw_lines_sorted = sort_all_ranked_lines(positive_probas, all_flaw_lines)
+    all_predicted_lines_number_sorted = sort_all_ranked_lines(positive_probas, all_predicted_lines_number)
+    
+    all_lines_with_labels = []
+    for func_idx, ranked_lines in enumerate(all_ranked_lines_sorted):
+        flaw_lines = all_flaw_lines_sorted[func_idx]
+        
+        for line_idx, line_content in enumerate(ranked_lines):
+            if line_idx < all_predicted_lines_number_sorted[func_idx]:
+                line_score = 1 # lines predicted as vulnerable
+            else:
+                line_score = 0 # lines not predicted as vulnerable
+                
+            if line_content in flaw_lines:
+                label = 1
+            else:
+                label = 0
+
+            all_lines_with_labels.append((line_content, line_score, label))
+
+    # # Separate lines with line_score=0 and line_score=1
+    # vulnerable_lines = [line for line in all_lines_with_labels if line[1] == 1]
+    # non_vulnerable_lines = [line for line in all_lines_with_labels if line[1] == 0]
+
+    # # Shuffle only the non-vulnerable lines
+    # random.shuffle(non_vulnerable_lines)
+
+    # # Combine the shuffled non-vulnerable lines with the vulnerable lines
+    # sorted_lines_with_labels = vulnerable_lines + non_vulnerable_lines
+    
+    sorted_lines_with_labels = sorted(all_lines_with_labels, key=lambda x: x[1], reverse=True)
+    
+    return sorted_lines_with_labels
+
 # Function to compute Effort@X%Recall by sorting all lines
-def compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, all_flaw_lines, test_all_flaw_lines, all_total_locs, all_predicted_lines_number, x_percent=20):
+def compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, all_total_locs, all_predicted_lines_number, x_percent=20):
     
     # Prepare data for Cost-Effectiveness calculation
-    all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines, all_predicted_lines_number) # contains the label (vulnerable or not) of each line in the sorted lines
+    #all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines, all_predicted_lines_number) # contains the label (vulnerable or not) of each line in the sorted lines
+    all_labels_lines_sorted = create_sorted_lines_with_labels_and_probas(all_ranked_lines, positive_probas, all_flaw_lines, all_predicted_lines_number)
     
     total_test_loc = compute_total_loc(all_total_locs)
 
@@ -1093,7 +1127,8 @@ def compute_recall_at_x_percent_loc_rankedFuncs(all_ranked_lines, positive_proba
 
     # Prepare data for Cost-Effectiveness calculation
     all_ranked_lines_sorted = sort_all_ranked_lines(positive_probas, all_ranked_lines)
-    all_flaw_lines_sorted = sort_all_flaw_lines(positive_probas, all_flaw_lines)
+    #all_flaw_lines_sorted = sort_all_flaw_lines(positive_probas, all_flaw_lines)
+    all_flaw_lines_sorted = sort_all_ranked_lines(positive_probas, all_flaw_lines)
     
     total_test_loc = compute_total_loc(all_total_locs)
 
@@ -1123,10 +1158,11 @@ def compute_recall_at_x_percent_loc_rankedFuncs(all_ranked_lines, positive_proba
     return found_vulnerable_lines / flaw_lines_num
 
 # Function to compute Recall@1%LOC by sorting all lines
-def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines, all_flaw_lines, test_all_flaw_lines, all_total_locs, all_predicted_lines_number, x_percent=1):
+def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, positive_probas, all_neg_lines, all_flaw_lines, test_all_flaw_lines, all_total_locs, all_predicted_lines_number, x_percent=1):
 
     # Prepare data for Cost-Effectiveness calculation
-    all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines, all_predicted_lines_number) # contains the label (vulnerable or not) of each line in the sorted lines
+    #all_labels_lines_sorted = create_sorted_lines_with_labels(all_ranked_lines, all_flaw_lines, all_predicted_lines_number) # contains the label (vulnerable or not) of each line in the sorted lines
+    all_labels_lines_sorted = create_sorted_lines_with_labels_and_probas(all_ranked_lines, positive_probas, all_flaw_lines, all_predicted_lines_number)
     
     total_test_loc = compute_total_loc(all_total_locs)
 
@@ -1158,7 +1194,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[73]:
+# In[212]:
 
 
 # Function to evaluate all metrics for each function
@@ -1228,7 +1264,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x):
     return final_results_df
 
 
-# In[74]:
+# In[213]:
 
 
 # Results based on per function accuracy
@@ -1241,7 +1277,7 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[75]:
+# In[214]:
 
 
 # Prepare data for line-level evaluation of cost-effectiveness
@@ -1249,7 +1285,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[76]:
+# In[221]:
 
 
 # Results based on the total of lines
@@ -1262,12 +1298,12 @@ if sort_by_lines == False:
     effortXrecall = compute_effort_at_x_percent_recall_rankedFuncs(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=20)
     recallXloc = compute_recall_at_x_percent_loc_rankedFuncs(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, x_percent=1)
 else: #sort_by_lines == True
-    effortXrecall = compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, all_predicted_lines_number, x_percent=20)
-    recallXloc = compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, all_predicted_lines_number, x_percent=1)
+    effortXrecall = compute_effort_at_x_percent_recall_rankedLines(all_ranked_lines, positive_probas, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, all_predicted_lines_number, x_percent=20)
+    recallXloc = compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, positive_probas, all_neg_lines, all_flaw_lines, test_all_flaw_lines, test_all_total_locs, all_predicted_lines_number, x_percent=1)
     
 
 
-# In[77]:
+# In[222]:
 
 
 # Display Final Evaluation Results
@@ -1289,7 +1325,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[78]:
+# In[223]:
 
 
 # Display Final Evaluation Results in Percentages
