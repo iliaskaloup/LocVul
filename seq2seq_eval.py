@@ -85,7 +85,8 @@ dataset = pd.read_csv(os.path.join(root_path, 'data', 'dataset.csv'))
 checkpoint_dir = './checkpoints'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
-checkpoint_dir_seq2seq = './checkpoints_seq2seq_512'
+max_len_lines = 512
+checkpoint_dir_seq2seq = './checkpoints_seq2seq_512'  # './checkpoints_seq2seq' for max_len_lines = 128 or './checkpoints_seq2seq_512' for max_len_lines = 512
 save_path_seq2seq = os.path.join(checkpoint_dir_seq2seq, 'best_weights.pt')
 
 
@@ -437,7 +438,7 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[49]:
+# In[15]:
 
 
 ONLY_TP_Accuracy = True
@@ -446,7 +447,7 @@ ONLY_TP_CostEffect = False
 ONLY_TP = ONLY_TP_CostEffect
 
 
-# In[50]:
+# In[16]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -463,7 +464,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[51]:
+# In[17]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -476,7 +477,7 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 # Apply Seq2Seq model
 
-# In[52]:
+# In[18]:
 
 
 # def tokenize_data_without_labels(tokenizer, positive_samples):
@@ -499,10 +500,9 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 # test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[53]:
+# In[19]:
 
 
-max_len_lines = 512
 def tokenize_data(tokenizer, positive_samples, positive_lines, max_len_lines):
     input_encodings = tokenizer(
         positive_samples,
@@ -531,7 +531,7 @@ test_dataset_seq2seq = TensorDataset(test_encodings['input_ids'], test_encodings
 test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[54]:
+# In[20]:
 
 
 # Load the CodeT5 model
@@ -547,7 +547,7 @@ else:
 print(model_seq2seq.to(device))
 
 
-# In[55]:
+# In[21]:
 
 
 # Make predictions on the testing set
@@ -584,7 +584,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[177]:
+# In[22]:
 
 
 # compute the average number of lines predicted as vulnerable by the seq2seq model
@@ -597,7 +597,7 @@ logger.info(f"Mean predicted length: {mean_pred_len}")
 logger.info(f"Median predicted length: {med_pred_len}")
 
 
-# In[178]:
+# In[23]:
 
 
 # compute the average number of lines that are actual vulnerable lines
@@ -610,7 +610,7 @@ logger.info(f"Mean actual flaw length: {mean_actual_vuln_len}")
 logger.info(f"Median actual flaw length: {med_actual_vuln_len}")
 
 
-# In[179]:
+# In[24]:
 
 
 def calc_accurary(test_preds, real_positive_lines):
@@ -622,7 +622,7 @@ def calc_accurary(test_preds, real_positive_lines):
     return accuracy
 
 
-# In[180]:
+# In[25]:
 
 
 # compute simple accuracy: In how many functions the seq2seq model identified the vulnerable lines 100%
@@ -630,7 +630,7 @@ accuracy = calc_accurary(test_preds, positive_lines)
 logger.info(f"Accuracy: {accuracy*100, '%'}")
 
 
-# In[181]:
+# In[26]:
 
 
 # compute simple accuracy with truncated output: In how many functions the seq2seq model identified the vulnerable lines 100%, 
@@ -639,7 +639,7 @@ accuracy_trunc = calc_accurary(test_preds, actual_labels)
 logger.info(f"Accuracy on truncated labels: {accuracy_trunc*100, '%'}")
 
 
-# In[182]:
+# In[27]:
 
 
 # compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
@@ -702,67 +702,69 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
     return original_lines[most_similar_idx]
 
 
-# test_preds_similar = []
-# for i, pred in enumerate(test_preds):
-#     predicted_lines  = pred.split('\n')
-#     original_lines  = positive_samples[i].split('\n')
-#     similar_str = ''
-#     for j, predicted_line in enumerate(predicted_lines):
-#         if predicted_line not in original_lines and j < len(predicted_lines)-1: # to avoid to spoil a correct line AND to just to avoid a difference with the actual_labels in the evaluation
-#             similar_line = get_most_similar_line(predicted_line, original_lines, tokenizer_seq2seq, model_seq2seq)
-#         else:
-#             similar_line = predicted_line
-#         if j == 0:
-#             similar_str += similar_line
-#         else:
-#             similar_str += '\n' + similar_line
+test_preds_similar = []
+for i, pred in enumerate(test_preds):
+    predicted_lines  = pred.split('\n')
+    original_lines  = positive_samples[i].split('\n')
+    similar_str = ''
+    for j, predicted_line in enumerate(predicted_lines):
+        if predicted_line not in original_lines and j < len(predicted_lines)-1: # to avoid to spoil a correct line AND to just to avoid a difference with the actual_labels in the evaluation
+            similar_line = get_most_similar_line(predicted_line, original_lines, tokenizer_seq2seq, model_seq2seq)
+        else:
+            similar_line = predicted_line
+        if j == 0:
+            similar_str += similar_line
+        else:
+            similar_str += '\n' + similar_line
             
-#     test_preds_similar.append(similar_str) 
+    test_preds_similar.append(similar_str) 
 
-# accuracy_similar = calc_accurary(test_preds_similar, positive_lines)
-# logger.info(f"Accuracy: {accuracy_similar*100, '%'}")
+accuracy_similar = calc_accurary(test_preds_similar, positive_lines)
+logger.info(f"Accuracy: {accuracy_similar*100, '%'}")
 
-# accuracy_similar_trunc = calc_accurary(test_preds_similar, actual_labels)
-# logger.info(f"Accuracy on truncated labels: {accuracy_similar_trunc*100, '%'}")
+accuracy_similar_trunc = calc_accurary(test_preds_similar, actual_labels)
+logger.info(f"Accuracy on truncated labels: {accuracy_similar_trunc*100, '%'}")
+
+test_preds = test_preds_similar
 
 
-# In[183]:
+# In[28]:
 
 
 num=25
 
 
-# In[184]:
+# In[29]:
 
 
 print(positive_samples[num])
 
 
-# In[185]:
+# In[30]:
 
 
 print(positive_lines[num])
 
 
-# In[186]:
+# In[31]:
 
 
 print(actual_labels[num])
 
 
-# In[187]:
+# In[32]:
 
 
 print(test_preds[num])
 
 
-# In[188]:
+# In[33]:
 
 
 print(test_preds[num] == actual_labels[num])
 
 
-# In[189]:
+# In[34]:
 
 
 print(test_preds[num] == positive_lines[num])
@@ -770,7 +772,7 @@ print(test_preds[num] == positive_lines[num])
 
 # Rank the lines based on the predictions of the seq2seq model and their position in the original functions
 
-# In[190]:
+# In[35]:
 
 
 all_ranked_lines = []
@@ -801,7 +803,7 @@ for label in str_labels:
 
 # Line-level Evaluation
 
-# In[191]:
+# In[36]:
 
 
 # Accuracy metrics
@@ -855,7 +857,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[192]:
+# In[37]:
 
 
 # Function to compute Top-X Precision for each function
@@ -902,7 +904,7 @@ def compute_top_x_recall(ranked_lines, flaw_lines, top_x):
     return count / len(flaw_lines)
 
 
-# In[193]:
+# In[38]:
 
 
 def compute_average_precision_at_k(ranked_lines, flaw_lines, k):
@@ -948,7 +950,7 @@ def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
     return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
 
 
-# In[211]:
+# In[39]:
 
 
 # Cost-Effectiveness metrics
@@ -1194,7 +1196,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, positive_proba
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[212]:
+# In[40]:
 
 
 # Function to evaluate all metrics for each function
@@ -1264,7 +1266,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x):
     return final_results_df
 
 
-# In[213]:
+# In[41]:
 
 
 # Results based on per function accuracy
@@ -1277,7 +1279,7 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[214]:
+# In[42]:
 
 
 # Prepare data for line-level evaluation of cost-effectiveness
@@ -1285,7 +1287,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[221]:
+# In[43]:
 
 
 # Results based on the total of lines
@@ -1303,7 +1305,7 @@ else: #sort_by_lines == True
     
 
 
-# In[222]:
+# In[44]:
 
 
 # Display Final Evaluation Results
@@ -1325,7 +1327,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[223]:
+# In[45]:
 
 
 # Display Final Evaluation Results in Percentages
