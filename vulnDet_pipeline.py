@@ -68,7 +68,7 @@ set_seed(seed)
 
 # Read data and model
 
-# In[3]:
+# In[ ]:
 
 
 # Read dataset
@@ -76,7 +76,7 @@ root_path = os.getcwd()
 dataset = pd.read_csv(os.path.join(root_path, 'data', 'dataset.csv'))
 
 
-# In[4]:
+# In[ ]:
 
 
 # Model checkpoint and fine-tuning logic
@@ -86,7 +86,7 @@ checkpoint_dir = './checkpoints'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
 
-# In[5]:
+# In[ ]:
 
 
 # define functions
@@ -132,7 +132,7 @@ def getMaxLen(X):
 
 # Get tokenizer
 
-# In[6]:
+# In[ ]:
 
 
 # Pre-trained tokenizer
@@ -147,7 +147,23 @@ tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True) #
 
 # Split data sets and explore data
 
-# In[7]:
+# In[ ]:
+
+
+# View the largest projects
+
+logger.info(f"List of projects in BigVul: {dataset['project'].unique()}")
+logger.info(f"Number of different projects in BigVul: {len(dataset['project'].unique())}")
+
+project_counts = dataset['project'].value_counts().nlargest(10)
+logger.info(f"Top-10 largest projects in BigVul and their size: {project_counts}")
+
+# Choose the selected project to include in the test set.
+# default = "all"
+selected_project = "openssl" # all # Chrome # linux # Android # qemu # php # ImageMagick # savannah # FFmpeg # ghostscript # openssl
+
+
+# In[ ]:
 
 
 # data split
@@ -157,6 +173,10 @@ data = dataset.iloc[0:-num_of_ratio, :]
 test_data = dataset.iloc[-num_of_ratio:, :]
 train_data = data.iloc[0:-num_of_ratio, :]
 val_data = data.iloc[-num_of_ratio:, :]
+
+# if selected_project=="all" continue with the whole test_set, else, if one specific project is selected keep only its samples
+if selected_project != "all":
+    test_data = test_data[test_data['project'] == selected_project]
 
 # Shuffle dataset
 
@@ -214,7 +234,7 @@ logger.info(f"Test data length: {len(test_data)}")
 
 # Pre-processing
 
-# In[8]:
+# In[ ]:
 
 
 # Pre-processing step: Under-sampling
@@ -258,7 +278,7 @@ else:
 
 # Get model and apply tokenizer
 
-# In[9]:
+# In[ ]:
 
 
 # Pre-trained model
@@ -330,7 +350,7 @@ X_test = tokenizer(
 
 # Model preparation
 
-# In[10]:
+# In[ ]:
 
 
 # Hyper-parameters
@@ -346,7 +366,7 @@ optimizer = AdamW(model.parameters(),
                   )
 
 
-# In[11]:
+# In[ ]:
 
 
 # Build Model
@@ -389,7 +409,7 @@ print(model.to(device))
 print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
-# In[12]:
+# In[ ]:
 
 
 # # we do not retrain our pre-trained BERT and train only the last linear dense layer
@@ -399,7 +419,7 @@ print("No. of trainable parameters: ", sum(p.numel() for p in model.parameters()
 
 # Training loop - Fine-tuning
 
-# In[13]:
+# In[ ]:
 
 
 if not FINE_TUNE and os.path.exists(save_path):
@@ -575,7 +595,7 @@ else:
 
 # Execution loop
 
-# In[14]:
+# In[ ]:
 
 
 # Load best model from checkpoint during training with early stopping
@@ -619,7 +639,7 @@ with torch.no_grad():
 
 # Evaluation process
 
-# In[15]:
+# In[ ]:
 
 
 # compute evaluation metrics
@@ -663,7 +683,7 @@ print("FN=",fn)
 sn.heatmap(conf_matrix, annot=True)
 
 
-# In[16]:
+# In[ ]:
 
 
 # Export classification report
@@ -741,7 +761,7 @@ with open(avg_csv_file_path, "w", newline="") as csvfile:
 
 # <b> Line-level Vulnerability Detection</b>
 
-# In[17]:
+# In[ ]:
 
 
 import lime
@@ -751,7 +771,7 @@ from transformers import pipeline
 from captum.attr import DeepLiftShap
 
 
-# In[18]:
+# In[ ]:
 
 
 # Eliminate Test samples that are vulnerable (target=1) but they have missing line-level labels (flaw lines is nan)
@@ -814,7 +834,7 @@ if REMOVE_MISSING_LINE_LABELS:
     logger.info(f"Classification Report:\n{new_class_report}")
 
 
-# In[19]:
+# In[ ]:
 
 
 # Function to tokenize the function into lines and tokens
@@ -831,7 +851,7 @@ def tokenize_function_to_lines_and_tokens(function_code, split_char):
     return lines, tokenized_lines
 
 
-# In[20]:
+# In[ ]:
 
 
 # Identify negative predictions ie TN and FN
@@ -848,7 +868,7 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[112]:
+# In[ ]:
 
 
 EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
@@ -860,7 +880,7 @@ EXPLAIN_ONLY_TP_CostEffect = False
 EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_CostEffect
 
 
-# In[113]:
+# In[ ]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -877,7 +897,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[114]:
+# In[ ]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -885,7 +905,7 @@ positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # 
 positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 
-# In[115]:
+# In[ ]:
 
 
 # Function to predict probabilities for LIME
@@ -908,7 +928,7 @@ def predict_proba_func_lime(texts):
     return probabilities
 
 
-# In[116]:
+# In[ ]:
 
 
 # Function to initialize the explainer (LIME or SHAP)
@@ -927,7 +947,7 @@ if EXPLAINER == "LIME" or EXPLAINER == "DEEPLIFTSHAP":
     explainer = initialize_explainer()
 
 
-# In[117]:
+# In[ ]:
 
 
 # Function to compute LIME values for each line by summing the token-level values
@@ -987,7 +1007,7 @@ def clean_special_token_values(all_values, padding=True):
 
 # XAI-based localization
 
-# In[118]:
+# In[ ]:
 
 
 # Initialize a list to store the LIME explanations
@@ -1078,7 +1098,7 @@ for i, sample in enumerate(positive_samples):
     explanation_results.append(explanation)
 
 
-# In[119]:
+# In[ ]:
 
 
 all_ranked_lines = []
@@ -1136,7 +1156,7 @@ for idx, explanation in enumerate(explanation_results):
 
 # Line-level Evaluation
 
-# In[128]:
+# In[ ]:
 
 
 # Accuracy metrics
@@ -1210,7 +1230,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[129]:
+# In[ ]:
 
 
 # Function to compute Top-X Precision for each function
@@ -1256,7 +1276,7 @@ def compute_top_x_recall(ranked_lines, flaw_lines, top_x):
     return count / len(flaw_lines) if len(flaw_lines)>0 else 0
 
 
-# In[130]:
+# In[ ]:
 
 
 def compute_average_precision_at_k(ranked_lines, flaw_lines, k):
@@ -1302,7 +1322,7 @@ def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
     return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
 
 
-# In[131]:
+# In[ ]:
 
 
 # Cost-Effectiveness metrics
@@ -1506,7 +1526,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[132]:
+# In[ ]:
 
 
 # def check_beyond_token_limit(lines_text, flaw_lines_text):
@@ -1530,7 +1550,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, all_neg_lines,
 #     return beyond
 
 
-# In[133]:
+# In[ ]:
 
 
 # Function to evaluate all metrics for each function
@@ -1608,7 +1628,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, all_lines
     return final_results_df
 
 
-# In[134]:
+# In[ ]:
 
 
 # Prepare data for line-level evaluation
@@ -1621,7 +1641,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[135]:
+# In[ ]:
 
 
 # Results based on per function accuracy
@@ -1634,7 +1654,7 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[136]:
+# In[ ]:
 
 
 # Results based on the total of lines
@@ -1652,7 +1672,7 @@ else: #sort_by_lines == True
     
 
 
-# In[137]:
+# In[ ]:
 
 
 # Display Final Evaluation Results
@@ -1674,7 +1694,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[138]:
+# In[ ]:
 
 
 # Display Final Evaluation Results in Percentages
@@ -1694,7 +1714,7 @@ print(f"Recall@1%LOC: {round(recallXloc * 100, 1)}%")
 
 # Comparison with sota
 
-# In[139]:
+# In[ ]:
 
 
 # Define metrics
