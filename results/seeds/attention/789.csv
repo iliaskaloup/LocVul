@@ -1,0 +1,2 @@
+accuracy,precision,recall,MRR,MAP,MAR,Median_IFA,EffortRecall,RecallLoc
+71.6,19.1,58.1,43.8,41.3,49.2,2,0.644,28.6
