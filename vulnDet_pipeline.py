@@ -45,6 +45,39 @@ from sklearn.utils import shuffle
 
 import logging
 
+import argparse
+
+# read arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", default=9, type=int, required=False, 
+                        choices=[0,1,2,3,4,5,6,7,8,9],
+                        help="The seed index (0-9) used for the entire analysis. Maps to predefined seed values [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680].")
+parser.add_argument("--FINE_TUNE", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Enable fine-tuning. Default is yes (training mode).")
+parser.add_argument("--model_variation", default="microsoft/codebert-base", type=str, required=False,
+                        help="The model variation e.g., microsoft/codebert-base for bimodal CodeBERT and microsoft/codebert-base-mlm for unimodal CodeBERT.")
+parser.add_argument("--checkpoint_dir", default="./checkpoints", type=str, required=False,
+                        help="The directory to store the fine-tuned model (and load from it in inference). Format example: './checkpoints'")
+parser.add_argument("--sampling", default="no", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Enable training data sampling. Default is no.")
+parser.add_argument("--REMOVE_MISSING_LINE_LABELS", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Remove missing line labels. Default is yes.")
+parser.add_argument("--EXPLAINER", default="ATTENTION", type=str, required=False,
+                        choices=["ATTENTION", "LIME"],
+                        help="The explainer used as baseline. Default is ATTENTION for the Self-Attention method.")
+parser.add_argument("--EXPLAIN_ONLY_TP", default="no", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Use all positives or only true positives for evaluating the localization approach. Default is no (i.e., use all the predicted as positives samples.")
+parser.add_argument("--sort_by_lines", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Yes when sort lines by line score and no when sort functions by prediction proba (and then sort lines in each function). Default is yes.")
+args = parser.parse_args()
+
+print(args)
+
 
 # Basic Configuration of logging and seed
 
@@ -58,7 +91,7 @@ logger = logging.getLogger(__name__)
 
 # Specify a constant seeder for processes
 seeders = [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680]
-seed = seeders[9]
+seed = seeders[args.seed]
 logger.info(f"SEED: {seed}")
 np.random.seed(seed)
 random.seed(seed)
@@ -80,9 +113,13 @@ dataset = pd.read_csv(os.path.join(root_path, 'data', 'dataset.csv'))
 
 
 # Model checkpoint and fine-tuning logic
-FINE_TUNE = True  # Set this to False if you don't want to fine-tune the model and load from checkpoint
+FINE_TUNE = args.FINE_TUNE  # Set this to False if you don't want to fine-tune the model and load from checkpoint
+if FINE_TUNE == "no":
+    FINE_TUNE = False
+else:
+    FINE_TUNE = True
 
-checkpoint_dir = './checkpoints'
+checkpoint_dir = args.checkpoint_dir #'./checkpoints'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
 
@@ -136,7 +173,7 @@ def getMaxLen(X):
 
 
 # Pre-trained tokenizer
-model_variation = "microsoft/codebert-base"
+model_variation = args.model_variation #"microsoft/codebert-base"
 tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True) #Tokenizer
 #bert-base-uncased #bert-base # roberta-base # distilbert-base-uncased #distilbert-base # microsoft/codebert-base-mlm
 # 'albert-base-v2'
@@ -239,7 +276,12 @@ logger.info(f"Test data length: {len(test_data)}")
 
 # Pre-processing step: Under-sampling
 
-sampling = False
+sampling = args.sampling #False
+if sampling == "yes":
+    sampling = True
+else:
+    sampling = False
+
 if n_categories == 2 and sampling == True:
     # Apply under-sampling with the specified strategy
     class_counts = pd.Series(train_data["Labels"]).value_counts()
@@ -775,7 +817,11 @@ from captum.attr import DeepLiftShap
 
 
 # Eliminate Test samples that are vulnerable (target=1) but they have missing line-level labels (flaw lines is nan)
-REMOVE_MISSING_LINE_LABELS = True # True # False
+REMOVE_MISSING_LINE_LABELS = args.REMOVE_MISSING_LINE_LABELS #True # True # False
+if REMOVE_MISSING_LINE_LABELS == "no":
+    REMOVE_MISSING_LINE_LABELS = False
+else:
+    REMOVE_MISSING_LINE_LABELS = True
 
 if REMOVE_MISSING_LINE_LABELS:
 
@@ -871,13 +917,17 @@ for neg_func in negative_samples:
 # In[22]:
 
 
-EXPLAINER = "ATTENTION"  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
+EXPLAINER = args.EXPLAINER  # or "LIME" or "DEEPLIFTSHAP" or "ATTENTION" based on user choice
 logger.info(f"Initializing {EXPLAINER} explainer for Positive predictions...")
 
 EXPLAIN_ONLY_TP_Accuracy = True
 EXPLAIN_ONLY_TP_CostEffect = False
 
-EXPLAIN_ONLY_TP = EXPLAIN_ONLY_TP_CostEffect
+EXPLAIN_ONLY_TP = args.EXPLAIN_ONLY_TP #EXPLAIN_ONLY_TP_CostEffect
+if EXPLAIN_ONLY_TP == "yes":
+    EXPLAIN_ONLY_TP = True
+else:
+    EXPLAIN_ONLY_TP = False
 
 
 # In[23]:
@@ -1668,7 +1718,11 @@ ifa_.to_csv('ifa_self_attention.csv', index=False, header=True)
 # Results based on the total of lines
 
 # configure sorting choice
-sort_by_lines = True # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
+sort_by_lines = args.sort_by_lines #True    # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
+if sort_by_lines == "no":
+    sort_by_lines = False
+else:
+    sort_by_lines = True
 
 # Usage
 if sort_by_lines == False:

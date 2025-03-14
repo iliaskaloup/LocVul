@@ -20,7 +20,6 @@ import random
 from collections import OrderedDict
 from collections import defaultdict
 import time
-import random
 
 import torch
 import torch.nn as nn
@@ -47,6 +46,23 @@ from sklearn.utils import shuffle
 import logging
 import openpyxl
 
+import argparse
+
+# read arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", default=9, type=int, required=False, 
+                        choices=[0,1,2,3,4,5,6,7,8,9],
+                        help="The seed index (0-9) used for the entire analysis. Maps to predefined seed values [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680].")
+parser.add_argument("--FINE_TUNE", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Enable fine-tuning. Default is yes (training mode).")
+parser.add_argument("--model_variation", default="Salesforce/codet5-base", type=str, required=False,
+                        help="The model variation e.g., Salesforce/codet5-base for CodeT5 and google-t5/t5-base for T5.")
+parser.add_argument("--checkpoint_dir", default="./checkpoints_seq2seq", type=str, required=False,
+                        help="The directory to store the fine-tuned model (and load from it in inference). Format example: './checkpoints_seq2seq'")
+args = parser.parse_args()
+
+print(args)
 
 # Basic Configuration of logging and seed
 
@@ -60,14 +76,14 @@ logger = logging.getLogger(__name__)
 
 # Specify a constant seeder for processes
 seeders = [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680]
-seed = seeders[9]
+seed = seeders[args.seed]
 logger.info(f"SEED: {seed}")
 np.random.seed(seed)
 random.seed(seed)
 torch.manual_seed(seed)
 set_seed(seed)
 
-checkpoint_dir = './checkpoints_seq2seq'
+checkpoint_dir = args.checkpoint_dir #'./checkpoints_seq2seq'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 os.makedirs(checkpoint_dir, exist_ok=True)
 
@@ -107,7 +123,11 @@ dataset = dataset.dropna(subset=["processed_func"])
 # In[5]:
 
 
-FINE_TUNE = True  # Set this to False if you don't want to fine-tune the model and load from checkpoint
+FINE_TUNE = args.FINE_TUNE  # Set this to False if you don't want to fine-tune the model and load from checkpoint
+if FINE_TUNE == "no":
+    FINE_TUNE = False
+else:
+    FINE_TUNE = True
 
 
 # In[6]:
@@ -198,7 +218,7 @@ test_data = replace_delimiter_with_newline(test_data)
 # In[10]:
 
 
-model_variation = "Salesforce/codet5-base" # "google-t5/t5-base" # Salesforce/codet5-base"
+model_variation = args.model_variation # "google-t5/t5-base" # Salesforce/codet5-base"
 #tokenizer = AutoTokenizer.from_pretrained('Salesforce/codet5-base')
 tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True)
 

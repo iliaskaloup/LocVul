@@ -48,6 +48,39 @@ import statistics
 import math
 from sklearn.metrics.pairwise import cosine_similarity
 
+import argparse
+
+# read arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--seed", default=9, type=int, required=False, 
+                        choices=[0,1,2,3,4,5,6,7,8,9],
+                        help="The seed index (0-9) used for the entire analysis. Maps to predefined seed values [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680].")
+parser.add_argument("--model_variation", default="microsoft/codebert-base", type=str, required=False,
+                        help="The model variation for function-level predictions e.g., microsoft/codebert-base for bimodal CodeBERT and microsoft/codebert-base-mlm for unimodal CodeBERT.")
+parser.add_argument("--model_variation_seq2seq", default="Salesforce/codet5-base", type=str, required=False,
+                        help="The model variation for line-level predictions e.g., Salesforce/codet5-base for CodeT5 and google-t5/t5-base for T5.")
+parser.add_argument("--checkpoint_dir", default="./checkpoints", type=str, required=False,
+                        help="The directory to load the model for function-level predictions. Format example: './checkpoints'")
+parser.add_argument("--checkpoint_dir_seq2seq", default="./checkpoints_seq2seq", type=str, required=False,
+                        help="The directory to load the model for line-level predictions. Format example: './checkpoints_seq2seq'")
+parser.add_argument("--sampling", default="no", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Enable training data sampling. Default is no.")
+parser.add_argument("--REMOVE_MISSING_LINE_LABELS", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Remove missing line labels. Default is yes.")
+parser.add_argument("--ONLY_TP", default="no", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Use all positives or only true positives for evaluating the localization approach. Default is no (i.e., use all the predicted as positives samples.")
+parser.add_argument("--sort_by_lines", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Yes when sort lines by line score and no when sort functions by prediction proba (and then sort lines in each function). Default is yes.")
+parser.add_argument("--SIMILARITY_REPLACEMENT", default="yes", type=str, required=False,
+                        choices=["yes", "no"],
+                        help="Enable hallucinations handling mechanism. Default is yes.")
+args = parser.parse_args()
+
+print(args)
 
 # Basic Configuration of logging and seed
 
@@ -61,7 +94,7 @@ logger = logging.getLogger(__name__)
 
 # Specify a constant seeder for processes
 seeders = [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680]
-seed = seeders[9]
+seed = seeders[args.seed]
 logger.info(f"SEED: {seed}")
 np.random.seed(seed)
 random.seed(seed)
@@ -82,11 +115,11 @@ dataset = pd.read_csv(os.path.join(root_path, 'data', 'dataset.csv'))
 # In[4]:
 
 
-checkpoint_dir = './checkpoints'
+checkpoint_dir = args.checkpoint_dir #'./checkpoints'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
 max_len_lines = 512
-checkpoint_dir_seq2seq = './checkpoints_seq2seq'  # './checkpoints_seq2seq_128' for max_len_lines = 128 or './checkpoints_seq2seq' for max_len_lines = 512
+checkpoint_dir_seq2seq = args.checkpoint_dir_seq2seq #'./checkpoints_seq2seq'  # './checkpoints_seq2seq_128' for max_len_lines = 128 or './checkpoints_seq2seq' for max_len_lines = 512
 save_path_seq2seq = os.path.join(checkpoint_dir_seq2seq, 'best_weights.pt')
 
 
@@ -95,14 +128,14 @@ save_path_seq2seq = os.path.join(checkpoint_dir_seq2seq, 'best_weights.pt')
 # In[5]:
 
 
-model_variation = "microsoft/codebert-base"
+model_variation = args.model_variation #"microsoft/codebert-base"
 tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True)
 
 
 # In[6]:
 
 
-model_variation_seq2seq = "Salesforce/codet5-base"
+model_variation_seq2seq = args.model_variation_seq2seq #"Salesforce/codet5-base"
 tokenizer_seq2seq = AutoTokenizer.from_pretrained(model_variation_seq2seq, do_lower_case=True)
 
 
@@ -185,7 +218,11 @@ del dataset
 
 # Pre-processing step: Under-sampling
 
-sampling = False
+sampling = args.sampling #False
+if sampling == "yes":
+    sampling = True
+else:
+    sampling = False
 if n_categories == 2 and sampling == True:
     # Apply under-sampling with the specified strategy
     class_counts = pd.Series(train_data["Labels"]).value_counts()
@@ -382,7 +419,11 @@ else:
 model.to(device)
 
 # Eliminate Test samples that are vulnerable (target=1) but they have missing line-level labels (flaw lines is nan)
-REMOVE_MISSING_LINE_LABELS = True # True # False
+REMOVE_MISSING_LINE_LABELS = args.REMOVE_MISSING_LINE_LABELS #True # True # False
+if REMOVE_MISSING_LINE_LABELS == "no":
+    REMOVE_MISSING_LINE_LABELS = False
+else:
+    REMOVE_MISSING_LINE_LABELS = True
 
 test_time1 = time.time()
 
@@ -476,7 +517,11 @@ for neg_func in negative_samples:
 ONLY_TP_Accuracy = True
 ONLY_TP_CostEffect = False
 
-ONLY_TP = ONLY_TP_CostEffect
+ONLY_TP = args.ONLY_TP #ONLY_TP_CostEffect
+if ONLY_TP == "yes":
+    ONLY_TP = True
+else:
+    ONLY_TP = False
 
 
 # In[18]:
@@ -742,7 +787,11 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
 # In[50]:
 
 
-SIMILARITY_REPLACEMENT = True
+SIMILARITY_REPLACEMENT = args.SIMILARITY_REPLACEMENT #True
+if SIMILARITY_REPLACEMENT == "no":
+    SIMILARITY_REPLACEMENT = False
+else:
+    SIMILARITY_REPLACEMENT = True
 
 if SIMILARITY_REPLACEMENT:
 
@@ -1347,7 +1396,11 @@ test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in r
 # Results based on the total of lines
 
 # configure sorting choice
-sort_by_lines = True # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
+sort_by_lines = args.sort_by_lines #True # False # True when sort lines by line score and False when sort functions by prediction proba (and then sort lines in each function)
+if sort_by_lines == "no":
+    sort_by_lines = False
+else:
+    sort_by_lines = True
 
 # Usage
 if sort_by_lines == False:
