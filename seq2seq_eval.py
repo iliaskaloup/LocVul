@@ -61,7 +61,7 @@ logger = logging.getLogger(__name__)
 
 # Specify a constant seeder for processes
 seeders = [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680]
-seed = seeders[0]
+seed = seeders[9]
 logger.info(f"SEED: {seed}")
 np.random.seed(seed)
 random.seed(seed)
@@ -86,7 +86,7 @@ checkpoint_dir = './checkpoints'
 save_path = os.path.join(checkpoint_dir, 'best_weights.pt')
 
 max_len_lines = 512
-checkpoint_dir_seq2seq = './checkpoints_seq2seq_512'  # './checkpoints_seq2seq' for max_len_lines = 128 or './checkpoints_seq2seq_512' for max_len_lines = 512
+checkpoint_dir_seq2seq = './checkpoints_seq2seq'  # './checkpoints_seq2seq_128' for max_len_lines = 128 or './checkpoints_seq2seq' for max_len_lines = 512
 save_path_seq2seq = os.path.join(checkpoint_dir_seq2seq, 'best_weights.pt')
 
 
@@ -121,7 +121,7 @@ logger.info(f"Top-10 largest projects in BigVul and their size: {project_counts}
 
 # Choose the selected project to include in the test set.
 # default = "all"
-selected_project = "openssl" # all # Chrome # linux # Android # qemu # php # ImageMagick # savannah # FFmpeg # ghostscript # openssl
+selected_project = "all" # all # Chrome # linux # Android # qemu # php # ImageMagick # savannah # FFmpeg # ghostscript # openssl
 
 
 # In[8]:
@@ -384,6 +384,8 @@ model.to(device)
 # Eliminate Test samples that are vulnerable (target=1) but they have missing line-level labels (flaw lines is nan)
 REMOVE_MISSING_LINE_LABELS = True # True # False
 
+test_time1 = time.time()
+
 if REMOVE_MISSING_LINE_LABELS:
 
     test_data = test_data.reset_index(drop=True)
@@ -440,8 +442,18 @@ if REMOVE_MISSING_LINE_LABELS:
     new_class_report = classification_report(actual_labels, test_pred)
     logger.info(f"Classification Report:\n{new_class_report}")
 
+    test_time2 = time.time()
+    testing_time = test_time2 - test_time1
+    print("Perception time per sample:", (testing_time / len(test_pred)))
+
 
 # In[15]:
+
+
+print("Perception time per sample:", (testing_time / len(test_pred)))
+
+
+# In[16]:
 
 
 # Identify negative predictions ie TN and FN
@@ -458,7 +470,7 @@ for neg_func in negative_samples:
         all_neg_lines.append(neg_line)
 
 
-# In[16]:
+# In[17]:
 
 
 ONLY_TP_Accuracy = True
@@ -467,7 +479,7 @@ ONLY_TP_CostEffect = False
 ONLY_TP = ONLY_TP_CostEffect
 
 
-# In[17]:
+# In[18]:
 
 
 # Identify True Positives (where the predicted label and actual label are both 1)
@@ -484,7 +496,7 @@ else:
 actual_positive_indices = [i for i, label in enumerate(Y_test.tolist()) if label == 1]  # Indices of Actual Positive predictions (TPs + FNs)
 
 
-# In[18]:
+# In[19]:
 
 
 positive_samples = [test_data['Text'].tolist()[i] for i in positive_indices]  # Extract Positive samples from test data
@@ -497,7 +509,7 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 
 # Apply Seq2Seq model
 
-# In[19]:
+# In[20]:
 
 
 # def tokenize_data_without_labels(tokenizer, positive_samples):
@@ -520,7 +532,7 @@ positive_probas = [test_probas_pred[i] for i in positive_indices]
 # test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[20]:
+# In[21]:
 
 
 def tokenize_data(tokenizer, positive_samples, positive_lines, max_len_lines):
@@ -551,7 +563,7 @@ test_dataset_seq2seq = TensorDataset(test_encodings['input_ids'], test_encodings
 test_loader_seq2seq = DataLoader(test_dataset_seq2seq, sampler=SequentialSampler(test_dataset_seq2seq), batch_size=batch_size)
 
 
-# In[21]:
+# In[22]:
 
 
 # Load the CodeT5 model
@@ -560,14 +572,15 @@ model_seq2seq = AutoModelForSeq2SeqLM.from_pretrained(model_variation_seq2seq)
 #load model
 checkpoint = torch.load(save_path_seq2seq, map_location=device)
 # If model is wrapped in DataParallel, load state_dict directly into the underlying model
-if torch.cuda.device_count() > 1:
-    model_seq2seq.module.load_state_dict(checkpoint['model'])
-else:
-    model_seq2seq.load_state_dict(checkpoint['model'])
+# if torch.cuda.device_count() > 1:
+#     model_seq2seq.module.load_state_dict(checkpoint['model'])
+# else:
+#     model_seq2seq.load_state_dict(checkpoint['model'])
+model_seq2seq.load_state_dict(checkpoint['model'])
 print(model_seq2seq.to(device))
 
 
-# In[22]:
+# In[23]:
 
 
 # Make predictions on the testing set
@@ -584,10 +597,11 @@ with torch.no_grad():
         input_ids, attention_mask, labels = [data.to(device) for data in batch_data]
 
         # Generate predictions
-        if torch.cuda.device_count() > 1:
-            outputs = model_seq2seq.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
-        else:
-            outputs = model_seq2seq.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+        # if torch.cuda.device_count() > 1:
+        #     outputs = model_seq2seq.module.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+        # else:
+        #     outputs = model_seq2seq.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
+        outputs = model_seq2seq.generate(input_ids=input_ids, attention_mask=attention_mask, max_length=max_len_lines)
         
         # Decode predicted sequences and actual labels
         decoded_preds = tokenizer_seq2seq.batch_decode(outputs, skip_special_tokens=True)
@@ -601,10 +615,11 @@ testing_time = test_end_time - test_start_time
 
 # Display the total testing time and average time per sample
 print("Testing completed after", testing_time)
+print("Perception time per sample:", (testing_time / len(test_preds)))
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[23]:
+# In[24]:
 
 
 # compute the average number of lines predicted as vulnerable by the seq2seq model
@@ -617,7 +632,7 @@ logger.info(f"Mean predicted length: {mean_pred_len}")
 logger.info(f"Median predicted length: {med_pred_len}")
 
 
-# In[24]:
+# In[25]:
 
 
 # compute the average number of lines that are actual vulnerable lines
@@ -630,7 +645,7 @@ logger.info(f"Mean actual flaw length: {mean_actual_vuln_len}")
 logger.info(f"Median actual flaw length: {med_actual_vuln_len}")
 
 
-# In[25]:
+# In[26]:
 
 
 def calc_accurary(test_preds, real_positive_lines):
@@ -642,7 +657,7 @@ def calc_accurary(test_preds, real_positive_lines):
     return accuracy
 
 
-# In[26]:
+# In[27]:
 
 
 # compute simple accuracy: In how many functions the seq2seq model identified the vulnerable lines 100%
@@ -650,7 +665,7 @@ accuracy = calc_accurary(test_preds, positive_lines)
 logger.info(f"Accuracy: {accuracy*100, '%'}")
 
 
-# In[27]:
+# In[28]:
 
 
 # compute simple accuracy with truncated output: In how many functions the seq2seq model identified the vulnerable lines 100%, 
@@ -659,7 +674,7 @@ accuracy_trunc = calc_accurary(test_preds, actual_labels)
 logger.info(f"Accuracy on truncated labels: {accuracy_trunc*100, '%'}")
 
 
-# In[28]:
+# In[29]:
 
 
 # compute accuracy metrics using the most similar lines of the predicted to handle hallucinations
@@ -724,10 +739,10 @@ def get_most_similar_line(predicted_line, original_lines, tokenizer, model):
 
 # Choose whether to replace predicted lines with the most similar lines in the function to handle hallucinations
 
-# In[29]:
+# In[50]:
 
 
-SIMILARITY_REPLACEMENT = False
+SIMILARITY_REPLACEMENT = True
 
 if SIMILARITY_REPLACEMENT:
 
@@ -757,51 +772,53 @@ if SIMILARITY_REPLACEMENT:
     test_preds = test_preds_similar
 
 
-# In[32]:
+'''
+# In[51]:
 
 
-num=100
+num=15
 
 
-# In[33]:
+# In[52]:
 
 
 print(positive_samples[num])
 
 
-# In[34]:
+# In[53]:
 
 
 print(positive_lines[num])
 
 
-# In[35]:
+# In[54]:
 
 
 print(actual_labels[num])
 
 
-# In[36]:
+# In[55]:
 
 
 print(test_preds[num])
 
 
-# In[37]:
+# In[56]:
 
 
 print(test_preds[num] == actual_labels[num])
 
 
-# In[38]:
+# In[57]:
 
 
 print(test_preds[num] == positive_lines[num])
+'''
 
 
 # Rank the lines based on the predictions of the seq2seq model and their position in the original functions
 
-# In[39]:
+# In[58]:
 
 
 all_ranked_lines = []
@@ -832,7 +849,7 @@ for label in str_labels:
 
 # Line-level Evaluation
 
-# In[40]:
+# In[59]:
 
 
 # Accuracy metrics
@@ -886,7 +903,7 @@ def compute_ifa(ranked_lines, flaw_lines):
     return ifa
 
 
-# In[41]:
+# In[60]:
 
 
 # Function to compute Top-X Precision for each function
@@ -933,7 +950,7 @@ def compute_top_x_recall(ranked_lines, flaw_lines, top_x):
     return count / len(flaw_lines)
 
 
-# In[42]:
+# In[61]:
 
 
 def compute_average_precision_at_k(ranked_lines, flaw_lines, k):
@@ -979,7 +996,7 @@ def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
     return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
 
 
-# In[43]:
+# In[62]:
 
 
 # Cost-Effectiveness metrics
@@ -1225,7 +1242,7 @@ def compute_recall_at_x_percent_loc_rankedLines(all_ranked_lines, positive_proba
     return found_vulnerable_lines / flaw_lines_num
 
 
-# In[44]:
+# In[63]:
 
 
 # Function to evaluate all metrics for each function
@@ -1295,7 +1312,7 @@ def evaluate_vulnerability_detection(all_ranked_lines, all_flaw_lines, top_x):
     return final_results_df
 
 
-# In[45]:
+# In[64]:
 
 
 # Results based on per function accuracy
@@ -1308,7 +1325,15 @@ final_results_df = evaluate_vulnerability_detection(all_ranked_lines, all_flaw_l
 print(final_results_df)
 
 
-# In[46]:
+# In[65]:
+
+
+ifa_all = final_results_df["IFA"]
+ifa_ = ifa_all.iloc[0:-2]
+ifa_.to_csv('ifa_locvul.csv', index=False, header=True)
+
+
+# In[66]:
 
 
 # Prepare data for line-level evaluation of cost-effectiveness
@@ -1316,7 +1341,7 @@ test_all_flaw_lines = [test_data['Line_Index'].tolist()[i] for i in actual_posit
 test_all_total_locs = [len(test_data['Text'].tolist()[i].split('\n')) for i in range(len(test_data))] # Compute total LOC for each sample in the testing set
 
 
-# In[47]:
+# In[67]:
 
 
 # Results based on the total of lines
@@ -1334,7 +1359,7 @@ else: #sort_by_lines == True
     
 
 
-# In[48]:
+# In[68]:
 
 
 # Display Final Evaluation Results
@@ -1356,7 +1381,7 @@ print(f"Effort@20%Recall: {effortXrecall}")
 print(f"Recall@1%LOC: {recallXloc}")
 
 
-# In[49]:
+# In[69]:
 
 
 # Display Final Evaluation Results in Percentages

@@ -3,7 +3,7 @@
 
 # <b> Line-level Vulnerability Detection</b>
 
-# In[59]:
+# In[1]:
 
 
 #!/usr/bin/env python
@@ -60,7 +60,7 @@ logger = logging.getLogger(__name__)
 
 # Specify a constant seeder for processes
 seeders = [123456, 789012, 345678, 901234, 567890, 123, 456, 789, 135, 680]
-seed = seeders[0]
+seed = seeders[9]
 logger.info(f"SEED: {seed}")
 np.random.seed(seed)
 random.seed(seed)
@@ -107,7 +107,7 @@ dataset = dataset.dropna(subset=["processed_func"])
 # In[5]:
 
 
-FINE_TUNE = False  # Set this to False if you don't want to fine-tune the model and load from checkpoint
+FINE_TUNE = True  # Set this to False if you don't want to fine-tune the model and load from checkpoint
 
 
 # In[6]:
@@ -195,7 +195,7 @@ test_data = replace_delimiter_with_newline(test_data)
 
 # Tokenization
 
-# In[12]:
+# In[10]:
 
 
 model_variation = "Salesforce/codet5-base" # "google-t5/t5-base" # Salesforce/codet5-base"
@@ -203,7 +203,7 @@ model_variation = "Salesforce/codet5-base" # "google-t5/t5-base" # Salesforce/co
 tokenizer = AutoTokenizer.from_pretrained(model_variation, do_lower_case=True)
 
 
-# In[13]:
+# In[11]:
 
 
 # Get the actual tokenized lengths
@@ -248,7 +248,7 @@ logger.info(f"Maximum tokenized length of Lines: {max_len_lines}")
 #max_len_lines = 128
 
 
-# In[14]:
+# In[12]:
 
 
 def tokenize_data(data, max_len_lines):
@@ -282,14 +282,14 @@ test_encodings = tokenize_data(test_data, max_len_lines)
 
 # Prepare DataLoaders
 
-# In[15]:
+# In[13]:
 
 
 # Define batch size
 batch_size = 8
 
 
-# In[16]:
+# In[14]:
 
 
 # Create TensorDatasets
@@ -305,7 +305,7 @@ test_loader = DataLoader(test_dataset, sampler=SequentialSampler(test_dataset), 
 
 # Model Initialization
 
-# In[17]:
+# In[15]:
 
 
 # Load the CodeT5 model
@@ -323,7 +323,7 @@ if torch.cuda.device_count() > 1:
 
 # Training Loop
 
-# In[18]:
+# In[16]:
 
 
 # Hyper-parameters
@@ -338,7 +338,7 @@ lr_scheduler = get_scheduler(
 )
 
 
-# In[19]:
+# In[17]:
 
 
 if FINE_TUNE:
@@ -500,7 +500,7 @@ if FINE_TUNE:
 
 # Evaluation
 
-# In[20]:
+# In[18]:
 
 
 # Load best model from checkpoint during training with early stopping
@@ -514,7 +514,7 @@ else:
 model.to(device)
 
 
-# In[21]:
+# In[19]:
 
 
 # Make predictions on the testing set
@@ -551,7 +551,7 @@ print("Testing completed after", testing_time)
 print("Perception time per sample:", int(testing_time / len(test_preds)))
 
 
-# In[22]:
+# In[20]:
 
 
 def extract_rouge_value(rouge_scores, rouge_key):
@@ -579,7 +579,7 @@ logger.info(f"ROUGE-L: {rougeL_score:.4f}")
 logger.info(f"ROUGE-Lsum: {rougeLsum_score:.4f}")
 
 
-# In[60]:
+# In[21]:
 
 
 # Save the source code, predictions, and true labels into a single file for further analysis
@@ -602,7 +602,7 @@ results_df.to_excel('test_results.xlsx', index=False)
 
 # Generating Vulnerable Lines (Inference)
 
-# In[24]:
+# In[22]:
 
 
 # Function to generate vulnerable lines for a code snippet
@@ -655,7 +655,7 @@ print("Predicted Vulnerable Lines:")
 print(predicted_vulnerable_lines)
 
 
-# In[44]:
+# In[23]:
 
 
 # Assuming your test dataset is loaded into a DataFrame called 'test_data'
@@ -671,14 +671,14 @@ print("First Test Sample Code Snippet:")
 print(first_code_snippet)
 
 
-# In[45]:
+# In[24]:
 
 
 print("\Actual Vulnerable Lines:")
 print(test_data['Lines'].iloc[no_sample])
 
 
-# In[46]:
+# In[25]:
 
 
 print("\nPredicted Vulnerable Lines:")
