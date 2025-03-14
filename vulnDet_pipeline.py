@@ -1311,15 +1311,15 @@ def compute_average_recall_at_k(ranked_lines, flaw_lines, k):
     :return: Average Recall at K for this function.
     """
     relevant_found = 0
-    precision_sum = 0
+    recall_sum = 0
     top_k_lines = ranked_lines[:k]  # Consider only the top K lines
 
     for i, (line_index, _, _) in enumerate(top_k_lines):
         if line_index in flaw_lines:
             relevant_found += 1
-            precision_sum += relevant_found / len(flaw_lines)  if len(flaw_lines)>0 else 0 # Precision at this rank
+            recall_sum += relevant_found / len(flaw_lines)  if len(flaw_lines)>0 else 0 # Recall at this rank
 
-    return precision_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
+    return recall_sum / relevant_found if relevant_found>0 else 0  # Avoid division by zero
 
 
 # In[33]:
