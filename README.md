@@ -17,6 +17,7 @@ git clone https://github.com/iliaskaloup/LocVul.git
 and navigate to the cloned repository.
 
 Inside the LocVul folder in the main branch, there is a yaml file:
+
 • torchenv.yml file, which is the python-conda virtual environment (venv) that we used.
 
 There are 6 python scripts in the root directory and 3 folders:
@@ -90,5 +91,5 @@ J. Fan, Y. Li, S. Wang and T. N. Nguyen, "A C/C++ Code Vulnerability Dataset wit
 ### Citation
 To cite this paper:
 ~~~
-lias Kalouptsoglou, Miltiadis Siavvas, Apostolos Ampatzoglou, Dionysios Kehagias, and Alexander Chatzigeorgiou. 2025. LocVul: Line-level Vulnerability Localization based on a Sequence-to-Sequence approach. ACM Trans. Softw. Eng. Methodol.
+Ilias Kalouptsoglou, Miltiadis Siavvas, Apostolos Ampatzoglou, Dionysios Kehagias, and Alexander Chatzigeorgiou. 2025. LocVul: Line-level Vulnerability Localization based on a Sequence-to-Sequence approach. ACM Trans. Softw. Eng. Methodol.
 ~~~
