@@ -52,17 +52,17 @@ python data_mining.py
 ### Experiment Replication
 To train the function-level model (CodeBERT) and evaluate the Self-Attention approach (training and inference) run:
 ~~~
-python vulnDet_pipeline.py –seed=9 –FINE_TUNE=”yes” –model_variation=”microsoft/codebert-base” --checkpoint_dir=”./checkpoints” --sampling=”no” --REMOVE_MISSING_LINE_LABELS=”yes” --EXPLAINER="ATTENTION" --EXPLAIN_ONLY_TP=”no” --sort_by_lines=”yes”
+python vulnDet_pipeline.py --seed=9 --FINE_TUNE=”yes” --model_variation=”microsoft/codebert-base” --checkpoint_dir=”./checkpoints” --sampling=”no” --REMOVE_MISSING_LINE_LABELS=”yes” --EXPLAINER="ATTENTION" --EXPLAIN_ONLY_TP=”no” --sort_by_lines=”yes”
 ~~~
 
 To evaluate the Self-Attention approach (inference only) run:
 ~~~
-python vulnDet_pipeline.py –seed=9 –FINE_TUNE=”no” –model_variation=”microsoft/codebert-base” --checkpoint_dir=”./checkpoints” --sampling=”no” --REMOVE_MISSING_LINE_LABELS=”yes” --EXPLAINER="ATTENTION" --EXPLAIN_ONLY_TP=”no” --sort_by_lines=”yes”
+python vulnDet_pipeline.py --seed=9 --FINE_TUNE=”no” --model_variation=”microsoft/codebert-base” --checkpoint_dir=”./checkpoints” --sampling=”no” --REMOVE_MISSING_LINE_LABELS=”yes” --EXPLAINER="ATTENTION" --EXPLAIN_ONLY_TP=”no” --sort_by_lines=”yes”
 ~~~
 
 To train the line-level model (CodeT5) run:
 ~~~
-python Seq2Seq_vulnDet.py –seed=9 –FINE_TUNE=”yes” –model_variation=”Salesforce/codet5-base” – checkpoint_dir=”./checkpoints_seq2seq”
+python Seq2Seq_vulnDet.py --seed=9 --FINE_TUNE=”yes” --model_variation=”Salesforce/codet5-base” --checkpoint_dir=”./checkpoints_seq2seq”
 ~~~
 
 To evaluate the Sequence-to-Sequence approach run:
