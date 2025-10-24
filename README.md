@@ -91,5 +91,5 @@ J. Fan, Y. Li, S. Wang and T. N. Nguyen, "A C/C++ Code Vulnerability Dataset wit
 ### Citation
 To cite this paper:
 ~~~
-Ilias Kalouptsoglou, Miltiadis Siavvas, Apostolos Ampatzoglou, Dionysios Kehagias, and Alexander Chatzigeorgiou. 2025. LocVul: Line-level Vulnerability Localization based on a Sequence-to-Sequence approach. ACM Trans. Softw. Eng. Methodol.
+Ilias Kalouptsoglou, Miltiadis Siavvas, Apostolos Ampatzoglou, Dionysios Kehagias, Alexander Chatzigeorgiou, LocVul: Line-level vulnerability localization based on a Sequence-to-Sequence approach, Information and Software Technology, Volume 189, 2026, 107940, ISSN 0950-5849, https://doi.org/10.1016/j.infsof.2025.107940.
 ~~~
