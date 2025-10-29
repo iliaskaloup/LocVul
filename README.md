@@ -20,7 +20,7 @@ Inside the LocVul folder in the main branch, there is a yaml file:
 
 • torchenv.yml file, which is the python-conda virtual environment (venv) that we used.
 
-There are 6 python scripts in the root directory and 3 folders:
+There are 7 python scripts in the root directory and 5 folders:
 
 • data_mining.py: It downloads the dataset and saves it as dataset.csv in the folder "data".
 
@@ -34,12 +34,18 @@ There are 6 python scripts in the root directory and 3 folders:
 
 • visualize.py: It produces the bar charts that are presented in the paper to compare LocVul with the Self-Attention approach
 
+• seq2seq_eval_cwe_analysis.py: An additional script (extension of the seq2seq_eval.py) that executes both CodeBERT and CodeT5 models to find vulnerable functions and the vulnerable lines inside them, evaluating the line-level performance of the Seq2Seq approach, reporting also the performance per CWE.
+
 
 • jupyter/ contains the jupyter equivalents of the python scripts
 
 • results/ contains the results of the analysis for all the used evaluation metrics per seed
 
 • preliminary_work/ contains several scripts developed in the beginning of this research and are not actual part of the study described in the paper
+
+• cross_cwe/ contains the scripts for the cross-cwe experiment
+
+• ablation/t5_xai/ contains the script developed to show the impact of the se2seq paradigm on the methodology
 
 
 ### Dataset
